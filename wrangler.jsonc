@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "playland",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-08-15",
+  // 画面・API・写真のすべてを Worker で認証してから返す（静的アセットを Worker より先に配信させない）
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  // Access を迂回できる公開経路を作らない
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "playland",
+      // 本番の ID は Cloudflare 側で作成後に設定する。ローカル開発では使われない
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // "access"：Cloudflare Access の JWT を検証する（本番）
+    // "dev-mock"：localhost からのリクエストに限り認証を省略する（.dev.vars で上書き）
+    "AUTH_MODE": "access",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  }
+}

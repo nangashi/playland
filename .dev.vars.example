@@ -1,0 +1,2 @@
+# cp .dev.vars.example .dev.vars
+AUTH_MODE=dev-mock

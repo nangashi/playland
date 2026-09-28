@@ -1,0 +1,42 @@
+{
+  "name": "playland",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.web.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.node.json",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply playland --local",
+    "db:seed:local": "wrangler d1 execute playland --local --file fixtures/seed.sql",
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate:local && pnpm db:seed:local",
+    "cf-typegen": "wrangler types src/server/worker-configuration.d.ts"
+  },
+  "dependencies": {
+    "hono": "^4.13.10",
+    "jose": "^6.2.12",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.62.0",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "~4.1.11",
+    "wrangler": "^4.143.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  }
+}
