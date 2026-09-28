@@ -1,2 +1,5 @@
 # cp .dev.vars.example .dev.vars
+# ローカル開発専用。本番では wrangler secret put で別の値を設定する
 AUTH_MODE=dev-mock
+PARENT_PIN=1234
+ADMIN_SESSION_SECRET=local-dev-only-secret-change-me-0123456789

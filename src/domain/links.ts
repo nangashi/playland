@@ -17,3 +17,24 @@ export function googleMapsSearchUrl(name: string, address: string | null): strin
   const query = address ? `${name} ${address}` : name;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
+
+const TRAVEL_MODE = { transit: "transit", car: "driving", bicycle: "bicycling" } as const;
+
+/**
+ * Google マップで行き方を調べるリンク（外部での確認用。アプリ内で時間は取得しない）。
+ */
+export function googleMapsDirectionsUrl(
+  destination: { name: string; address: string | null; latitude: number | null; longitude: number | null },
+  mode: keyof typeof TRAVEL_MODE,
+): string {
+  const params = new URLSearchParams({ api: "1", travelmode: TRAVEL_MODE[mode] });
+  params.set(
+    "destination",
+    destination.latitude !== null && destination.longitude !== null
+      ? `${destination.latitude},${destination.longitude}`
+      : destination.address
+        ? `${destination.name} ${destination.address}`
+        : destination.name,
+  );
+  return `https://www.google.com/maps/dir/?${params}`;
+}

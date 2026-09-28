@@ -1,0 +1,323 @@
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
+import type {
+  AdminItemResponse,
+  AdminPlaceResponse,
+  AdminSettingsResponse,
+  ItemDetailResponse,
+  ItemListResponse,
+} from "../src/domain/api";
+import { app } from "../src/server/app";
+import { get, ORIGIN, parentLogin, seed, sendJson } from "./helpers";
+
+beforeEach(seed);
+
+async function adminItem(id: string, headers: Record<string, string>): Promise<AdminItemResponse> {
+  const res = await get(`/api/admin/items/${id}`, { headers });
+  expect(res.status).toBe(200);
+  return res.json();
+}
+
+describe("親の権限（A18）", () => {
+  it("親セッションなしでは管理 API を使えない", async () => {
+    expect((await get("/api/admin/items/it-gym-spot")).status).toBe(401);
+    expect((await get("/api/admin/settings")).status).toBe(401);
+    expect((await sendJson("PATCH", "/api/admin/items/it-gym-spot", { version: 1, rain_policy: "ok" })).status).toBe(401);
+    expect((await sendJson("POST", "/api/admin/items", { kind: "event", title: "x" })).status).toBe(401);
+    const { results } = await env.DB.prepare("SELECT rain_policy FROM items WHERE id = 'it-gym-spot'").all();
+    expect(results[0]).toEqual({ rain_policy: "unknown" });
+  });
+
+  it("プロフィールの指定は権限にならない", async () => {
+    const res = await get("/api/admin/settings?profile_id=pr-parent", { headers: { "X-Profile-Id": "pr-parent" } });
+    expect(res.status).toBe(401);
+  });
+
+  it("PIN が違えば拒否し、5 回失敗すると正しい PIN でも一時的に拒否", async () => {
+    for (let i = 0; i < 5; i++) {
+      expect((await sendJson("POST", "/api/admin/session", { pin: "9999" })).status).toBe(401);
+    }
+    expect((await sendJson("POST", "/api/admin/session", { pin: "1234" })).status).toBe(429);
+  });
+
+  it("改ざんした Cookie は無効", async () => {
+    const { Cookie } = await parentLogin();
+    const tampered = Cookie!.replace(/.$/, (ch) => (ch === "A" ? "B" : "A"));
+    expect((await get("/api/admin/settings", { headers: { Cookie: tampered } })).status).toBe(401);
+  });
+
+  it("ログアウト後は使えない（Cookie を消す）", async () => {
+    const headers = await parentLogin();
+    const res = await sendJson("DELETE", "/api/admin/session", undefined, headers);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Set-Cookie")).toMatch(/Max-Age=0/);
+  });
+
+  it("セッション Cookie は HttpOnly・Secure・SameSite=Strict", async () => {
+    const res = await sendJson("POST", "/api/admin/session", { pin: "1234" });
+    const cookie = res.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toMatch(/^__Host-pl_parent=/);
+    expect(cookie).toMatch(/HttpOnly/);
+    expect(cookie).toMatch(/Secure/);
+    expect(cookie).toMatch(/SameSite=Strict/);
+  });
+
+  it("PIN・署名鍵が未設定なら拒否（fail closed）", async () => {
+    const ctx = createExecutionContext();
+    const res = await app.fetch(
+      new Request(`${ORIGIN}/api/admin/session`, {
+        method: "POST",
+        headers: { Origin: ORIGIN, "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: "1234" }),
+      }),
+      { ...env, PARENT_PIN: "" },
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(503);
+  });
+
+  it("別オリジンからの管理操作は拒否", async () => {
+    const headers = await parentLogin();
+    const res = await sendJson("PATCH", "/api/admin/items/it-gym-spot", { version: 1, rain_policy: "ok" }, {
+      ...headers,
+      Origin: "https://evil.example",
+    });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("候補の編集", () => {
+  it("指定した項目だけを変え、版を上げ、お気に入りは変えない", async () => {
+    const headers = await parentLogin();
+    const before = await adminItem("it-science-slime", headers);
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/items/it-science-slime",
+      { version: before.item.version, rain_policy: "conditional", tag_ids: ["crafting"], experience_tags_status: "assessed" },
+      headers,
+    );
+    expect(res.status).toBe(200);
+    const after = await adminItem("it-science-slime", headers);
+    expect(after.item).toMatchObject({
+      rain_policy: "conditional",
+      version: before.item.version + 1,
+      title: before.item.title,
+      age_min: 6,
+    });
+    expect(after.item.parent_reviewed_at).not.toBeNull();
+    expect(after.tag_ids).toEqual(["crafting"]);
+    expect(after.occurrences).toEqual(before.occurrences);
+    const { results } = await env.DB.prepare("SELECT profile_id FROM favorites WHERE item_id = 'it-science-slime'").all();
+    expect(results).toEqual([{ profile_id: "pr-sora" }]);
+  });
+
+  it("古い版での編集は上書きせず 409。タグ・開催日も変えない", async () => {
+    const headers = await parentLogin();
+    const before = await adminItem("it-science-slime", headers);
+    await sendJson("PATCH", "/api/admin/items/it-science-slime", { version: before.item.version, title: "先の変更" }, headers);
+
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/items/it-science-slime",
+      {
+        version: before.item.version,
+        title: "後の変更",
+        tag_ids: ["cooking"],
+        occurrences: [{ start_date: "2026-12-01", end_date: "2026-12-01", precision: "date" }],
+      },
+      headers,
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ current_version: before.item.version + 1 });
+    const after = await adminItem("it-science-slime", headers);
+    expect(after.item.title).toBe("先の変更");
+    expect(after.tag_ids).toEqual(before.tag_ids);
+    expect(after.occurrences).toEqual(before.occurrences);
+    const { results } = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM audit_log WHERE target_id = 'it-science-slime'",
+    ).all<{ n: number }>();
+    expect(results[0]?.n).toBe(1);
+  });
+
+  it("開催日を置き換え、離れた日付は別の回として保存する", async () => {
+    const headers = await parentLogin();
+    const { item } = await adminItem("it-science-slime", headers);
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/items/it-science-slime",
+      {
+        version: item.version,
+        occurrences: [
+          { start_date: "2026-11-01", end_date: "2026-11-01", precision: "date" },
+          {
+            start_date: "2026-11-15",
+            end_date: "2026-11-15",
+            precision: "datetime",
+            starts_at: "2026-11-15T10:00:00+09:00",
+            ends_at: "2026-11-15T12:00:00+09:00",
+          },
+        ],
+      },
+      headers,
+    );
+    expect(res.status).toBe(200);
+    const after = await adminItem("it-science-slime", headers);
+    expect(after.occurrences.map((o) => [o.start_date, o.end_date, o.starts_at])).toEqual([
+      ["2026-11-01", "2026-11-01", null],
+      ["2026-11-15", "2026-11-15", "2026-11-15T01:00:00.000Z"],
+    ]);
+  });
+
+  it("矛盾する入力は 400 で拒否し、何も変えない", async () => {
+    const headers = await parentLogin();
+    const { item } = await adminItem("it-science-slime", headers);
+    const bad = [
+      // 日付だけの開催に時刻
+      { occurrences: [{ start_date: "2026-11-01", end_date: "2026-11-01", precision: "date", starts_at: "2026-11-01T10:00:00+09:00" }] },
+      // 終了日が先
+      { occurrences: [{ start_date: "2026-11-02", end_date: "2026-11-01", precision: "date" }] },
+      // 存在しない日付
+      { occurrences: [{ start_date: "2026-02-30", end_date: "2026-02-30", precision: "date" }] },
+      // 年齢の種別と値の不整合
+      { age_min_kind: "value", age_min: null },
+      { age_min_kind: "value", age_min: 10, age_max_kind: "value", age_max: 5 },
+      // 未定義のタグ
+      { tag_ids: ["not_a_tag"] },
+      // 未定義の項目
+      { publish_at: "now" },
+      // javascript: URL
+      { official_url: "javascript:alert(1)" },
+      // 存在しない会場
+      { place_id: "pl-nowhere" },
+    ];
+    for (const patch of bad) {
+      const res = await sendJson("PATCH", "/api/admin/items/it-science-slime", { version: item.version, ...patch }, headers);
+      expect(res.status, JSON.stringify(patch)).toBe(400);
+    }
+    const after = await adminItem("it-science-slime", headers);
+    expect(after.item.version).toBe(item.version);
+  });
+
+  it("常設スポットには開催日を設定できない", async () => {
+    const headers = await parentLogin();
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/items/it-gym-spot",
+      { version: 1, occurrences: [{ start_date: "2026-11-01", end_date: "2026-11-01", precision: "date" }] },
+      headers,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("URL とタイトルだけで手動追加でき、分からない項目は不明のまま（A11）", async () => {
+    const headers = await parentLogin();
+    const res = await sendJson(
+      "POST",
+      "/api/admin/items",
+      { kind: "event", title: "親が見つけたワークショップ", official_url: "https://example.com/ws" },
+      headers,
+    );
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    const detail: ItemDetailResponse = await (await get(`/api/items/${id}`)).json();
+    expect(detail).toMatchObject({
+      rain_policy: "unknown",
+      place: null,
+      cover: null,
+      schedule: { state: "unknown" },
+      eligibility: { age_min_kind: "unknown", guardian_rule: "unknown" },
+      reservation_requirement: "unknown",
+      price_status: "unknown",
+    });
+    // 保存もできる
+    expect((await sendJson("PUT", `/api/profiles/pr-sora/favorites/${id}`, undefined)).status).toBe(204);
+  });
+
+  it("既存の会場に別のイベントを追加しても、会場や以前のお気に入りは変わらない（A15）", async () => {
+    const headers = await parentLogin();
+    const placeBefore = await (await get("/api/admin/places/pl-sample-science", { headers })).json();
+    const res = await sendJson(
+      "POST",
+      "/api/admin/items",
+      { kind: "event", title: "新しい実験教室", place_id: "pl-sample-science" },
+      headers,
+    );
+    expect(res.status).toBe(201);
+    const placeAfter = await (await get("/api/admin/places/pl-sample-science", { headers })).json();
+    expect(placeAfter).toEqual(placeBefore);
+    const { results } = await env.DB.prepare("SELECT profile_id, item_id FROM favorites ORDER BY item_id").all();
+    expect(results).toEqual([
+      { profile_id: "pr-umi", item_id: "it-park-spot" },
+      { profile_id: "pr-sora", item_id: "it-science-slime" },
+    ]);
+  });
+});
+
+describe("場所と移動の編集", () => {
+  it("座標を消すと精度も不明に戻す。緯度だけの変更は拒否", async () => {
+    const headers = await parentLogin();
+    expect(
+      (await sendJson("PATCH", "/api/admin/places/pl-sample-park", { version: 1, latitude: 35 }, headers)).status,
+    ).toBe(400);
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/places/pl-sample-park",
+      { version: 1, latitude: null, longitude: null },
+      headers,
+    );
+    expect(res.status).toBe(200);
+    const body: AdminPlaceResponse = await (await get("/api/admin/places/pl-sample-park", { headers })).json();
+    expect(body.place).toMatchObject({ latitude: null, position_accuracy: "unknown", version: 2 });
+  });
+
+  it("手段の表示と親の目安を変更でき、一覧に反映される（A08・A09）", async () => {
+    const headers = await parentLogin();
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/places/pl-sample-park/transport",
+      {
+        version: 1,
+        preferences: [{ mode: "car", visibility: "hide", note: "駐車場なし" }],
+        estimates: [
+          { mode: "bicycle", route_status: "estimated", minutes: 21, basis: "door_to_door" },
+          { mode: "transit", route_status: "no_route" },
+        ],
+      },
+      headers,
+    );
+    expect(res.status).toBe(200);
+    const detail: ItemDetailResponse = await (await get("/api/items/it-park-spot")).json();
+    const views = Object.fromEntries(detail.travel!.map((v) => [v.mode, v]));
+    expect(views.car?.visible).toBe(false);
+    expect(views.bicycle).toMatchObject({ visible: false, estimate: { minutes: 21 } });
+    expect(views.transit).toMatchObject({ visible: true, estimate: { route_status: "no_route", minutes: null } });
+  });
+
+  it("出発地点を変えると古い所要時間を現行の値として使わない", async () => {
+    const headers = await parentLogin();
+    const settings: AdminSettingsResponse = await (await get("/api/admin/settings", { headers })).json();
+    const res = await sendJson(
+      "PATCH",
+      "/api/admin/settings",
+      { version: settings.version, origin_latitude: 35.1, origin_longitude: 139.1 },
+      headers,
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as AdminSettingsResponse).origin_version).toBe(settings.origin_version + 1);
+
+    const list: ItemListResponse = await (await get("/api/items?modes=bicycle&include_unknown=true")).json();
+    expect(list.items.map((i) => i.id)).not.toContain("it-park-spot");
+    const detail: ItemDetailResponse = await (await get("/api/items/it-park-spot")).json();
+    expect(detail.travel?.find((v) => v.mode === "bicycle")).toMatchObject({ estimate: null, stale_only: true });
+  });
+
+  it("一般の設定 API と監査ログに自宅の座標を出さない（A21）", async () => {
+    const headers = await parentLogin();
+    await sendJson("PATCH", "/api/admin/settings", { version: 1, origin_latitude: 35.123, origin_longitude: 139.456 }, headers);
+    const text = await (await get("/api/settings")).text();
+    expect(text).not.toMatch(/35\.123|139\.456|latitude|longitude/);
+    const { results } = await env.DB.prepare("SELECT * FROM audit_log WHERE target_type = 'settings'").all();
+    expect(JSON.stringify(results)).not.toMatch(/35\.123|139\.456/);
+  });
+});

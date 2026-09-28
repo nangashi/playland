@@ -21,6 +21,15 @@
       "migrations_dir": "migrations"
     }
   ],
+  // 写真。公開 URL（r2.dev・カスタムドメイン）は有効にせず、GET /media/:id からだけ返す
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "playland-media"
+    }
+  ],
+  // 秘密情報は wrangler secret put で設定する（Git に置かない）:
+  //   PARENT_PIN（4〜12桁の数字）, ADMIN_SESSION_SECRET（32文字以上）
   "vars": {
     // "access"：Cloudflare Access の JWT を検証する（本番）
     // "dev-mock"：localhost からのリクエストに限り認証を省略する（.dev.vars で上書き）

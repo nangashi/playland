@@ -9,7 +9,9 @@ export default defineConfig({
       miniflare: {
         bindings: {
           AUTH_MODE: "dev-mock",
-          TEST_MIGRATIONS: await readD1Migrations(path.join(__dirname, "migrations")),
+          PARENT_PIN: "1234",
+          ADMIN_SESSION_SECRET: "test-only-secret-0123456789abcdef0123",
+          TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "migrations")),
         },
       },
     })),

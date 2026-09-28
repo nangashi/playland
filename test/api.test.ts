@@ -15,9 +15,14 @@ describe("GET /api/items", () => {
   it("公開中の候補を返し、下書き・非表示は含めない", async () => {
     const body = await list();
     const ids = body.items.map((i) => i.id);
-    expect(body.total).toBe(7);
     expect(ids).not.toContain("it-draft");
     expect(ids).not.toContain("it-hidden");
+    // 終了済みイベント（9/20）は通常の発見一覧から外れる
+    expect(ids).not.toContain("it-science-star");
+    expect(body.total).toBe(6);
+    const withEnded = await list("?include_ended=true");
+    expect(withEnded.total).toBe(7);
+    expect(withEnded.items.at(-1)).toMatchObject({ id: "it-science-star", finished: true });
   });
 
   it("写真・座標・会場がなくても一覧に載る（A11）", async () => {

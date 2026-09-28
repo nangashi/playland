@@ -1,45 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, redirect, useLoaderData, useSearchParams, type LoaderFunctionArgs } from "react-router";
 import type { ItemCard as ItemCardData } from "../../domain/api";
-import { favoritesLabel } from "../../domain/labels";
-import { DEFAULT_PAGE_SIZE, favoritesFilters, type FavoritesFilter } from "../../domain/search";
-import { fetchItems, fetchProfiles } from "../api";
+import { favoritesLabel, purposeLabel } from "../../domain/labels";
+import { favoritesFilters, purposes } from "../../domain/search";
+import { ENTRANCES } from "../../domain/tags";
+import { fetchItems, fetchProfiles, fetchSettings } from "../api";
+import { FilterPanel } from "../components/FilterPanel";
 import { ItemCard } from "../components/ItemCard";
 import { getSelectedProfileId } from "../profile";
-
-const MAX_PAGES = 20;
-
-function readParams(params: URLSearchParams) {
-  const f = params.get("favorites");
-  const favorites: FavoritesFilter = favoritesFilters.includes(f as FavoritesFilter)
-    ? (f as FavoritesFilter)
-    : "all";
-  const pages = Math.min(Math.max(Number.parseInt(params.get("pages") ?? "1", 10) || 1, 1), MAX_PAGES);
-  return { favorites, pages };
-}
+import {
+  activeConditions,
+  conditionLabel,
+  MAX_PAGES,
+  readSearchState,
+  toApiParams,
+  writeSearchState,
+  type SearchState,
+} from "../searchState";
 
 export async function searchLoader({ request }: LoaderFunctionArgs) {
   const profileId = getSelectedProfileId();
   if (!profileId) throw redirect("/profiles");
-  const { favorites, pages } = readParams(new URL(request.url).searchParams);
+  const state = readSearchState(new URL(request.url).searchParams);
+
+  const [{ profiles }, settings] = await Promise.all([fetchProfiles(request.signal), fetchSettings(request.signal)]);
+  const profile = profiles.find((p) => p.id === profileId);
+  if (!profile) throw redirect("/profiles");
 
   // 「もっと みる」で読んだページも含めて取り直すことで、詳細から戻ったときに同じ一覧になる
-  const [profiles, ...results] = await Promise.all([
-    fetchProfiles(request.signal),
-    ...Array.from({ length: pages }, (_, i) =>
-      fetchItems(
-        { favorites, profileId, limit: DEFAULT_PAGE_SIZE, offset: i * DEFAULT_PAGE_SIZE },
-        request.signal,
-      ),
-    ),
-  ]);
-  const profile = profiles.profiles.find((p) => p.id === profileId);
-  if (!profile) throw redirect("/profiles");
+  const results = await Promise.all(
+    Array.from({ length: state.pages }, (_, i) => fetchItems(toApiParams(state, profile, i), request.signal)),
+  );
   return {
-    favorites,
-    pages,
+    state,
     profile,
-    profiles: profiles.profiles,
+    profiles,
+    settings,
     items: results.flatMap((r) => r.items),
     total: results[0]?.total ?? 0,
   };
@@ -47,6 +43,7 @@ export async function searchLoader({ request }: LoaderFunctionArgs) {
 
 export function SearchPage() {
   const data = useLoaderData<typeof searchLoader>();
+  const { state } = data;
   const [, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<ItemCardData[]>(data.items);
   useEffect(() => setItems(data.items), [data.items]);
@@ -55,6 +52,14 @@ export function SearchPage() {
     () => new Map(data.profiles.map((p) => [p.id, p.display_name])),
     [data.profiles],
   );
+
+  function update(next: Partial<SearchState>, options: { keepPages?: boolean } = {}) {
+    const merged = { ...state, ...next, pages: options.keepPages ? (next.pages ?? state.pages) : 1 };
+    setSearchParams(writeSearchState(merged), {
+      replace: options.keepPages,
+      preventScrollReset: options.keepPages,
+    });
+  }
 
   // 保存を外しても、その場ではカードを消さない（押した指の下から消えないように）
   function onSavedChange(itemId: string, saved: boolean) {
@@ -67,64 +72,109 @@ export function SearchPage() {
     );
   }
 
-  function selectFavorites(next: FavoritesFilter) {
-    setSearchParams(next === "all" ? {} : { favorites: next });
+  function toggleEntrance(id: string) {
+    const entrances = state.entrances.includes(id)
+      ? state.entrances.filter((e) => e !== id)
+      : [...state.entrances, id];
+    update({ entrances });
   }
 
-  function loadMore() {
-    const next = new URLSearchParams();
-    if (data.favorites !== "all") next.set("favorites", data.favorites);
-    next.set("pages", String(data.pages + 1));
-    setSearchParams(next, { replace: true, preventScrollReset: true });
-  }
-
-  const hasMore = items.length < data.total && data.pages < MAX_PAGES;
+  const hasMore = items.length < data.total && state.pages < MAX_PAGES;
+  const firstUnknown = items.findIndex((i) => i.unknown.length > 0);
+  const firstFinished = items.findIndex((i) => i.finished);
 
   return (
     <main className="page">
       <header className="topbar">
         <h1 className="app-title">おでかけ みつけた</h1>
-        <Link to="/profiles" className="profile-chip" aria-label="さがす ひとを かえる">
-          {data.profile.display_name}
-        </Link>
+        <div className="topbar-actions">
+          <Link to="/admin" className="parent-link">
+            おうちのひと
+          </Link>
+          <Link to="/profiles" className="profile-chip" aria-label="さがす ひとを かえる">
+            {data.profile.display_name}
+          </Link>
+        </div>
       </header>
+
+      <nav className="segmented segmented-2" aria-label="いつ いく？">
+        {purposes.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={p === state.purpose ? "is-active" : ""}
+            aria-pressed={p === state.purpose}
+            onClick={() => update({ purpose: p })}
+          >
+            {purposeLabel[p]}
+          </button>
+        ))}
+      </nav>
+
+      <div className="entrances" role="group" aria-label="なにを する？">
+        {ENTRANCES.map((e) => {
+          const active = state.entrances.includes(e.id);
+          return (
+            <button
+              key={e.id}
+              type="button"
+              className={active ? "entrance is-active" : "entrance"}
+              aria-pressed={active}
+              onClick={() => toggleEntrance(e.id)}
+            >
+              <span className="entrance-icon" aria-hidden>
+                {e.icon}
+              </span>
+              <span>{e.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <nav className="segmented" aria-label="ほぞんした ばしょで しぼる">
         {favoritesFilters.map((f) => (
           <button
             key={f}
             type="button"
-            className={f === data.favorites ? "is-active" : ""}
-            aria-pressed={f === data.favorites}
-            onClick={() => selectFavorites(f)}
+            className={f === state.favorites ? "is-active" : ""}
+            aria-pressed={f === state.favorites}
+            onClick={() => update({ favorites: f })}
           >
             {favoritesLabel[f]}
           </button>
         ))}
       </nav>
 
+      <FilterPanel state={state} profile={data.profile} settings={data.settings} onChange={update} />
+
       <p className="result-count" aria-live="polite">
         {data.total} けん
       </p>
 
       {items.length === 0 ? (
-        <EmptyResult favorites={data.favorites} onReset={() => selectFavorites("all")} />
+        <EmptyResult state={state} onChange={update} />
       ) : (
         <div className="card-list">
-          {items.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              profileId={data.profile.id}
-              profileNames={profileNames}
-              onSavedChange={onSavedChange}
-            />
+          {items.map((item, index) => (
+            <div key={item.id} className="card-slot">
+              {index === firstUnknown && index !== firstFinished && (
+                <h2 className="group-heading">わからない ところが ある ばしょ</h2>
+              )}
+              {index === firstFinished && <h2 className="group-heading">おわった イベント</h2>}
+              <ItemCard
+                item={item}
+                purpose={state.purpose}
+                profileId={data.profile.id}
+                profileNames={profileNames}
+                onSavedChange={onSavedChange}
+              />
+            </div>
           ))}
         </div>
       )}
 
       {hasMore && (
-        <button type="button" className="more-button" onClick={loadMore}>
+        <button type="button" className="more-button" onClick={() => update({ pages: state.pages + 1 }, { keepPages: true })}>
           もっと みる
         </button>
       )}
@@ -135,20 +185,28 @@ export function SearchPage() {
   );
 }
 
-/** 条件を勝手に外さず、変える条件を選べるようにする */
-function EmptyResult({ favorites, onReset }: { favorites: FavoritesFilter; onReset: () => void }) {
+/** 条件を勝手に外さず、どれを外すかを選べるようにする */
+function EmptyResult({ state, onChange }: { state: SearchState; onChange: (next: Partial<SearchState>) => void }) {
+  const conditions = activeConditions(state);
   return (
     <div className="empty">
-      {favorites === "all" ? (
+      {conditions.length === 0 ? (
         <p>まだ ばしょが とうろく されていないよ</p>
       ) : (
         <>
-          <p>
-            {favorites === "mine" ? "まだ「いきたい」に いれた ばしょは ないよ" : "かぞくの「いきたい」は まだ ないよ"}
-          </p>
-          <button type="button" className="secondary-button" onClick={onReset}>
-            ぜんぶから さがす
-          </button>
+          <p>この じょうけんに あう ばしょは みつからなかったよ。どれか はずしてみる？</p>
+          <div className="chip-row">
+            {conditions.map((c) => (
+              <button key={c.key} type="button" className="secondary-button" onClick={() => onChange(c.reset)}>
+                「{conditionLabel[c.key]}」を はずす
+              </button>
+            ))}
+            {!state.includeUnknown && (
+              <button type="button" className="secondary-button" onClick={() => onChange({ includeUnknown: true })}>
+                わからない ものも みる
+              </button>
+            )}
+          </div>
         </>
       )}
     </div>

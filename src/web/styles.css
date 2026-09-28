@@ -472,3 +472,544 @@ button {
   font-weight: 400;
   font-size: 15px;
 }
+
+/* ---- Phase 2 ---- */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.parent-link {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px 4px;
+}
+
+.segmented-2 {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 12px;
+}
+
+.segmented + .filters,
+.entrances + .segmented {
+  margin-top: 12px;
+}
+
+/* 入口（子どもが選ぶ） */
+.entrances {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, auto);
+  grid-auto-columns: minmax(92px, 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x proximity;
+}
+
+.entrance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 72px;
+  padding: 6px 4px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  scroll-snap-align: start;
+}
+
+.entrance-icon {
+  font-size: 24px;
+}
+
+.entrance.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+/* しぼりこみ */
+.filters {
+  margin-top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 16px;
+}
+
+.filters summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 13px;
+}
+
+.filters fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+}
+
+.filters legend {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.filters > .check {
+  margin-bottom: 14px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  word-break: keep-all;
+}
+
+.chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 一覧 */
+.card-slot {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-slot > .card {
+  flex: 1;
+}
+
+.group-heading {
+  font-size: 15px;
+  color: var(--muted);
+  margin: 12px 4px 8px;
+}
+
+.card.is-finished {
+  opacity: 0.75;
+}
+
+.card-tags {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.travel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.travel-note {
+  font-size: 12px;
+  color: var(--rain-cond);
+  font-weight: 700;
+}
+
+.unknown-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--rain-cond);
+}
+
+.badge-schedule-today { color: var(--accent); font-weight: 700; }
+.badge-schedule-upcoming { color: var(--event); }
+.badge-schedule-always { color: var(--spot); }
+.badge-schedule-ended,
+.badge-schedule-cancelled,
+.badge-schedule-unknown { color: var(--rain-ng); }
+
+.chip-row .secondary-button {
+  min-height: 44px;
+}
+
+/* 写真 */
+.photo {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 3 / 2;
+  background: var(--ph-sky);
+  overflow: hidden;
+}
+
+.photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-kind {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 0 6px;
+  opacity: 0.9;
+}
+
+.photo.is-hidden img {
+  opacity: 0.4;
+}
+
+.detail > .photo,
+.detail > .placeholder {
+  border-radius: var(--radius);
+  margin: 8px 0 12px;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.gallery .photo {
+  border-radius: 10px;
+}
+
+.gallery .text-button {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  background: var(--surface);
+}
+
+/* 詳細 */
+.section {
+  margin: 20px 0;
+}
+
+.section-title {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+
+.section .facts {
+  margin: 0;
+}
+
+.occurrences {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.occurrences .is-cancelled {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.raw-text {
+  margin-top: 6px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.travel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.travel-list li {
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.travel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-weight: 700;
+}
+
+.travel-time {
+  font-weight: 400;
+}
+
+.inline-link {
+  display: inline-block;
+  margin-top: 6px;
+  min-height: 32px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.parent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.provenance {
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.provenance p {
+  margin: 2px 0;
+}
+
+/* 管理 */
+.admin-nav {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.admin-nav a,
+.admin a:not([class]) {
+  color: var(--accent);
+}
+
+.admin-title {
+  text-align: left;
+}
+
+.admin-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0 24px;
+}
+
+.form fieldset {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px 16px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.form legend {
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.form label:not(.check):not(.chip) {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.form select,
+.form textarea,
+.pin-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.tag-group {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tag-group-head select {
+  width: auto !important;
+}
+
+.occurrence-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.occurrence-row input,
+.occurrence-row select {
+  width: auto !important;
+  flex: 1 1 130px;
+}
+
+.mode-block {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.mode-block h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.text-button {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0 8px;
+  border-radius: 8px;
+}
+
+.form-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0;
+  background: var(--bg);
+  display: grid;
+  gap: 8px;
+}
+
+.save-status {
+  margin: 0;
+  font-size: 14px;
+}
+
+.save-status.is-ok {
+  color: var(--spot);
+}
+
+.save-status.is-error {
+  color: var(--danger);
+}
+
+.save-status .secondary-button {
+  margin-top: 8px;
+}
+
+.pin-form {
+  display: grid;
+  gap: 12px;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.pin-form label {
+  display: grid;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.link-button:disabled {
+  opacity: 0.6;
+}
+
+button.link-button {
+  border: 0;
+  width: 100%;
+  cursor: pointer;
+}

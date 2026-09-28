@@ -1,14 +1,8 @@
 import { Hono } from "hono";
-import type { Context } from "hono";
-import type {
-  ItemCard,
-  ItemDetailResponse,
-  ItemListResponse,
-  ProfileListResponse,
-} from "../domain/api";
-import { idSchema, type ItemRecord, type PlaceRecord } from "../domain/model";
-import { favoriteIndex, parseSearchQuery, searchItems } from "../domain/search";
+import { idSchema } from "../domain/model";
+import { adminApi } from "./admin";
 import { requireFamily, requireSameOrigin } from "./auth";
+import { publicApi } from "./public";
 import * as repo from "./repo";
 import type { AppEnv } from "./types";
 
@@ -20,6 +14,7 @@ app.use("*", async (c, next) => {
   c.header("X-Frame-Options", "DENY");
   c.header("Referrer-Policy", "no-referrer");
 });
+// 画面・API・写真のすべてを家族認証の内側に置く
 app.use("*", requireFamily());
 app.use("/api/*", async (c, next) => {
   await next();
@@ -28,83 +23,34 @@ app.use("/api/*", async (c, next) => {
 });
 app.use("/api/*", requireSameOrigin());
 
-app.get("/api/profiles", async (c) => {
-  const profiles = await repo.listActiveProfiles(c.env.DB);
-  const body: ProfileListResponse = {
-    profiles: profiles.map(({ id, display_name, age_hint }) => ({ id, display_name, age_hint })),
-  };
-  return c.json(body);
-});
+app.route("/api/admin", adminApi);
+app.route("/api", publicApi);
+app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
 
-app.get("/api/items", async (c) => {
-  const parsed = parseSearchQuery(new URL(c.req.url).searchParams);
-  if (!parsed.success) return c.json({ error: "invalid query" }, 400);
-  const query = parsed.data;
-
-  const [items, favorites] = await Promise.all([
-    repo.listPublishedItems(c.env.DB),
-    repo.listFavorites(c.env.DB),
-  ]);
-  const result = searchItems(items, favorites, query);
-  const places = await repo.getPlaces(
-    c.env.DB,
-    result.items.flatMap((i) => (i.place_id ? [i.place_id] : [])),
-  );
-  const savedBy = favoriteIndex(favorites);
-  const body: ItemListResponse = {
-    items: result.items.map((item) => toCard(item, places, savedBy)),
-    total: result.total,
-    limit: query.limit,
-    offset: query.offset,
-  };
-  return c.json(body);
-});
-
-app.get("/api/items/:id", async (c) => {
+/** 写真は非公開 R2 から、認証済みのリクエストにだけ返す */
+app.get("/media/:id", async (c) => {
   const id = idSchema.safeParse(c.req.param("id"));
-  if (!id.success) return notFound(c);
-  const item = await repo.getPublishedItem(c.env.DB, id.data);
-  if (!item) return notFound(c);
-  const [places, favorites] = await Promise.all([
-    repo.getPlaces(c.env.DB, item.place_id ? [item.place_id] : []),
-    repo.listFavoritesForItem(c.env.DB, item.id),
-  ]);
-  const place = item.place_id ? places.get(item.place_id) : undefined;
-  const body: ItemDetailResponse = {
-    ...toCard(item, places, favoriteIndex(favorites)),
-    official_url: item.official_url,
-    place: place
-      ? {
-          id: place.id,
-          name: place.name,
-          address_text: place.address_text,
-          latitude: place.latitude,
-          longitude: place.longitude,
-          position_accuracy: place.position_accuracy,
-          google_maps_url: place.google_maps_url,
-        }
-      : null,
-  };
-  return c.json(body);
+  if (!id.success) return c.body(null, 404);
+  const media = await repo.getActiveMedia(c.env.DB, id.data);
+  if (!media) return c.body(null, 404);
+  const object = await c.env.MEDIA.get(media.r2_key);
+  if (!object) {
+    console.error("media object missing", media.id);
+    return c.body(null, 404);
+  }
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": media.content_type,
+      "Content-Length": String(object.size),
+      // 端末内だけにキャッシュし、共有キャッシュ（CDN 等）には載せない
+      "Cache-Control": "private, max-age=3600",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Content-Disposition": "inline",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 });
-
-app.put("/api/profiles/:profileId/favorites/:itemId", async (c) => {
-  const ids = await resolveFavoriteTarget(c);
-  if (!ids) return notFound(c);
-  await repo.addFavorite(c.env.DB, ids.profileId, ids.itemId, new Date().toISOString());
-  return c.body(null, 204);
-});
-
-app.delete("/api/profiles/:profileId/favorites/:itemId", async (c) => {
-  const profileId = idSchema.safeParse(c.req.param("profileId"));
-  const itemId = idSchema.safeParse(c.req.param("itemId"));
-  if (!profileId.success || !itemId.success) return notFound(c);
-  // 非公開になった候補の保存も解除できるよう、候補の公開状態は問わない
-  await repo.removeFavorite(c.env.DB, profileId.data, itemId.data);
-  return c.body(null, 204);
-});
-
-app.all("/api/*", (c) => notFound(c));
+app.all("/media/*", (c) => c.body(null, 404));
 
 // 画面（静的アセット）も認証を通した後に返す
 app.all("*", async (c) => {
@@ -118,36 +64,3 @@ app.onError((err, c) => {
   console.error(err);
   return c.json({ error: "internal error" }, 500);
 });
-
-function toCard(
-  item: ItemRecord,
-  places: Map<string, PlaceRecord>,
-  savedBy: Map<string, Set<string>>,
-): ItemCard {
-  const place = item.place_id ? places.get(item.place_id) : undefined;
-  return {
-    id: item.id,
-    kind: item.kind,
-    title: item.title,
-    child_description: item.child_description,
-    rain_policy: item.rain_policy,
-    place: place ? { id: place.id, name: place.name } : null,
-    saved_by_profile_ids: [...(savedBy.get(item.id) ?? [])].sort(),
-  };
-}
-
-async function resolveFavoriteTarget(c: Context<AppEnv>) {
-  const profileId = idSchema.safeParse(c.req.param("profileId"));
-  const itemId = idSchema.safeParse(c.req.param("itemId"));
-  if (!profileId.success || !itemId.success) return null;
-  const [profileOk, item] = await Promise.all([
-    repo.isActiveProfile(c.env.DB, profileId.data),
-    repo.getPublishedItem(c.env.DB, itemId.data),
-  ]);
-  if (!profileOk || !item) return null;
-  return { profileId: profileId.data, itemId: itemId.data };
-}
-
-function notFound(c: Context<AppEnv>) {
-  return c.json({ error: "not found" }, 404);
-}
