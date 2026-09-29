@@ -24,8 +24,16 @@ beforeEach(seed);
 
 describe("validate（DB を見ない検証）", () => {
   it("サンプルは妥当", () => {
-    const r = validateBundle(sample);
-    expect(r.ok).toBe(true);
+    expect(validateBundle(sample).ok).toBe(true);
+  });
+
+  it("イベントは次のフェーズまで受け付けない", () => {
+    const b = clone();
+    (b.candidates[0]!.item as Record<string, unknown>).kind = "event";
+    expect(errorsOf(b).join()).toMatch(/次のフェーズ/);
+    const b2 = clone();
+    (b2.candidates[0]!.item as Record<string, unknown>).occurrences = [];
+    expect(errorsOf(b2).length).toBeGreaterThan(0);
   });
 
   it("未定義タグは本番に入れず、提案に回すよう求める", () => {
@@ -34,28 +42,26 @@ describe("validate（DB を見ない検証）", () => {
     expect(errorsOf(b).join()).toMatch(/未定義のタグ「programming」/);
   });
 
-  it("根拠のない判定を拒否（雨・開催日・年齢）", () => {
+  it("根拠のない判定を拒否（雨・年齢・予約・料金）", () => {
     const b = clone();
     b.candidates[0]!.evidence = [];
     const errors = errorsOf(b).join("\n");
-    expect(errors).toMatch(/雨天対応/);
-    expect(errors).toMatch(/開催日/);
-    expect(errors).toMatch(/対象年齢/);
+    for (const label of ["雨天対応", "対象年齢", "予約", "料金"]) expect(errors).toMatch(label);
   });
 
   it("出どころのない座標（推測）を拒否", () => {
     const b = clone();
-    Object.assign(b.candidates[1]!.place!, { latitude: 35.1, longitude: 139.1, position_accuracy: "exact" });
+    Object.assign(b.candidates[1]!.place, { latitude: 35.1, longitude: 139.1, position_accuracy: "exact" });
     expect(errorsOf(b).join()).toMatch(/position_source/);
   });
 
-  it("開催日の整合（known なのに開催日なし・終了日が先・日付だけに時刻）", () => {
+  it("場所の指定がない・二重指定を拒否", () => {
     const b1 = clone();
-    b1.candidates[2]!.item.occurrences = [];
-    expect(errorsOf(b1).join()).toMatch(/開催日がありません/);
+    (b1.candidates[0] as Record<string, unknown>).place = null;
+    expect(errorsOf(b1).length).toBeGreaterThan(0);
     const b2 = clone();
-    b2.candidates[2]!.item.occurrences = [{ start_date: "2026-10-18", end_date: "2026-10-17", precision: "date" } as never];
-    expect(errorsOf(b2).length).toBeGreaterThan(0);
+    b2.candidates[3]!.place.name = "二重";
+    expect(errorsOf(b2).join()).toMatch(/どちらか一方/);
   });
 
   it("javascript: URL・未定義の項目・長すぎる引用を拒否", () => {
@@ -72,13 +78,13 @@ describe("validate（DB を見ない検証）", () => {
 
   it("同じバンドル内の出典キーの重複を拒否", () => {
     const b = clone();
-    b.candidates[3]!.source.source_key = b.candidates[2]!.source.source_key;
+    b.candidates[2]!.source.source_key = b.candidates[1]!.source.source_key;
     expect(errorsOf(b).join()).toMatch(/重複/);
   });
 });
 
 describe("preview（照合）", () => {
-  it("新規・要確認を分ける。同じ URL 上の別の企画は別の候補", async () => {
+  it("新規・要確認を分ける。同じ URL 上の別のスポットは別の候補", async () => {
     const r = await previewBundle(env.DB, validateBundle(sample).bundle!);
     expect(r.matches.map((m) => m.status)).toEqual(["new", "new", "new", "review"]);
     expect(r.counts).toEqual({ new: 3, existing: 0, review: 1, error: 0 });
@@ -86,24 +92,24 @@ describe("preview（照合）", () => {
 
   it("タイトルだけの一致は自動統合せず要確認", async () => {
     const b = clone();
-    b.candidates[0]!.item.title = "スライム づくり 教室"; // 既存「スライムづくり教室」と表記ゆれ
+    b.candidates[0]!.item.title = "サンプル市 こども科学館"; // 既存と表記ゆれ
     const r = await previewBundle(env.DB, validateBundle(b).bundle!);
     expect(r.matches[0]).toMatchObject({ status: "review" });
-    expect(r.matches[0]!.reasons.join()).toMatch(/it-science-slime/);
+    expect(r.matches[0]!.reasons.join()).toMatch(/it-science-spot/);
   });
 
   it("既存の場所と同名の新しい場所は要確認", async () => {
     const b = clone();
-    b.candidates[1]!.place!.name = "サンプル森林公園";
+    b.candidates[1]!.place.name = "サンプル森林公園";
     const r = await previewBundle(env.DB, validateBundle(b).bundle!);
     expect(r.matches[1]!.reasons.join()).toMatch(/pl-sample-park/);
   });
 
   it("存在しない既存場所の指定はエラー", async () => {
     const b = clone();
-    b.candidates[0]!.place!.existing_place_id = "pl-nowhere";
+    b.candidates[3]!.place.existing_place_id = "pl-nowhere";
     const r = await previewBundle(env.DB, validateBundle(b).bundle!);
-    expect(r.matches[0]!.status).toBe("error");
+    expect(r.matches[3]!.status).toBe("error");
   });
 });
 
@@ -113,61 +119,55 @@ describe("apply（登録）", () => {
     expect(r.status).toBe("completed");
     expect(r.outcomes.map((o) => o.result)).toEqual(["inserted", "inserted", "inserted", "skipped_review"]);
 
-    const robot = r.outcomes[0]!.item_id!;
-    const detail: ItemDetailResponse = await (await get(`/api/items/${robot}`)).json();
+    const detail: ItemDetailResponse = await (await get(`/api/items/${r.outcomes[0]!.item_id}`)).json();
     expect(detail).toMatchObject({
+      title: "サンプル市こどもプラネタリウム",
       rain_policy: "ok",
-      place: { id: "pl-sample-science" },
-      eligibility: { age_min_kind: "value", age_min: 7, age_max_kind: "unknown" },
-      schedule: { occurrence_count: 2 },
+      place: { name: "サンプル市こどもプラネタリウム", address_text: "サンプル市ほしの町4-1", latitude: null },
+      eligibility: { age_min_kind: "none", age_max_kind: "none" },
+      reservation_requirement: "not_required",
+      price_status: "paid",
     });
-    expect(detail.tag_ids).toEqual(["crafting", "experiment", "science_museum"]);
-    // 離れた 2 日は別の回
-    expect(detail.occurrences.map((o) => o.start_date)).toEqual(["2026-10-11", "2026-10-25"]);
-    // 時刻は日本時間として解釈して UTC で保存
-    const lib: ItemDetailResponse = await (await get(`/api/items/${r.outcomes[2]!.item_id}`)).json();
-    expect(lib.occurrences[0]).toMatchObject({ starts_at: "2026-10-17T01:30:00.000Z", precision: "datetime" });
+    expect(detail.tag_ids).toEqual(["science_museum", "stargazing"]);
 
     const run = await env.DB.prepare("SELECT * FROM import_runs").first();
     expect(run).toMatchObject({ batch_id: "sample-import-001", status: "completed", new_count: 3, review_count: 1 });
   });
 
   it("親が認めた要確認の候補は登録できる", async () => {
-    const b = clone();
-    b.candidates[3]!.needs_review = [];
-    b.candidates[3]!.item.title = "スライムづくり教室"; // 既存と同名 → 要確認
-    const skipped = await apply(b);
-    expect(skipped.outcomes[3]!.result).toBe("skipped_review");
-    const accepted = await apply(b, [3]);
-    expect(accepted.outcomes[3]!.result).toBe("inserted");
+    expect((await apply(sample)).outcomes[3]!.result).toBe("skipped_review");
+    expect((await apply(sample, [3])).outcomes[3]!.result).toBe("inserted");
   });
 
   it("同じバンドルの再実行で二重登録しない（A16）", async () => {
     await apply(sample);
-    const before = { items: await count("items"), places: await count("places"), sources: await count("source_entries") };
+    const snapshot = async () => ({ items: await count("items"), places: await count("places"), sources: await count("source_entries") });
+    const before = await snapshot();
     const again = await apply(sample);
     expect(again.outcomes.slice(0, 3).map((o) => o.result)).toEqual(["skipped_existing", "skipped_existing", "skipped_existing"]);
-    expect({ items: await count("items"), places: await count("places"), sources: await count("source_entries") }).toEqual(before);
+    expect(await snapshot()).toEqual(before);
   });
 
   it("DB への書き込みが途中で失敗しても、その候補は丸ごと残らず、再実行で残りを完了できる（A16）", async () => {
-    // 1 件目（ロボット教室）の item_tags 書き込みだけを失敗させる
+    // 1 件目（プラネタリウム）の item_tags 書き込みだけを失敗させる
     await env.DB.prepare(
-      `CREATE TRIGGER fail_robot_tags BEFORE INSERT ON item_tags
-       WHEN NEW.tag_id = 'experiment' AND (SELECT title FROM items WHERE id = NEW.item_id) = 'はじめてのロボット教室'
+      `CREATE TRIGGER fail_first_tags BEFORE INSERT ON item_tags
+       WHEN NEW.tag_id = 'stargazing'
        BEGIN SELECT RAISE(ABORT, 'simulated failure'); END`,
     ).run();
     const first = await apply(sample);
     expect(first.status).toBe("partial");
     expect(first.outcomes.map((o) => o.result)).toEqual(["error", "inserted", "inserted", "skipped_review"]);
-    // 失敗した候補は item も出典も残らない（1 候補 = 1 トランザクション）
-    const leftover = await env.DB.prepare("SELECT COUNT(*) AS n FROM items WHERE title = 'はじめてのロボット教室'").first<{ n: number }>();
+    // 失敗した候補は場所も item も出典も残らない（1 候補 = 1 トランザクション）
+    const leftover = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM items WHERE title LIKE '%プラネタリウム%') + (SELECT COUNT(*) FROM places WHERE name LIKE '%プラネタリウム%') AS n",
+    ).first<{ n: number }>();
     expect(leftover?.n).toBe(0);
     const run = await env.DB.prepare("SELECT status, error_count, failure_reason FROM import_runs").first<{ failure_reason: string }>();
     expect(run).toMatchObject({ status: "partial", error_count: 1 });
     expect(run?.failure_reason).toMatch(/simulated failure/);
 
-    await env.DB.prepare("DROP TRIGGER fail_robot_tags").run();
+    await env.DB.prepare("DROP TRIGGER fail_first_tags").run();
     const retry = await apply(sample);
     expect(retry.outcomes.map((o) => o.result)).toEqual(["inserted", "skipped_existing", "skipped_existing", "skipped_review"]);
     expect(await count("source_entries")).toBe(3);
@@ -175,11 +175,11 @@ describe("apply（登録）", () => {
 
   it("親が修正した値は、同じ候補を取り込み直しても変わらない（A14）", async () => {
     const first = await apply(sample);
-    const robot = first.outcomes[0]!.item_id!;
+    const id = first.outcomes[0]!.item_id!;
     const headers = await parentLogin();
     const res = await sendJson(
       "PATCH",
-      `/api/admin/items/${robot}`,
+      `/api/admin/items/${id}`,
       { version: 1, rain_policy: "conditional", tag_ids: ["cooking"], experience_tags_status: "assessed" },
       headers,
     );
@@ -189,30 +189,32 @@ describe("apply（登録）", () => {
     const b = clone();
     b.batch_id = "sample-import-002";
     b.candidates[0]!.item.rain_policy = "not_suitable";
-    b.candidates[0]!.item.title = "ロボット教室（改題）";
+    b.candidates[0]!.item.title = "プラネタリウム（改題）";
     const again = await apply(b);
     expect(again.outcomes[0]!.result).toBe("skipped_existing");
-    const detail: ItemDetailResponse = await (await get(`/api/items/${robot}`)).json();
-    expect(detail).toMatchObject({ rain_policy: "conditional", title: "はじめてのロボット教室", tag_ids: ["cooking"] });
+    const detail: ItemDetailResponse = await (await get(`/api/items/${id}`)).json();
+    expect(detail).toMatchObject({ rain_policy: "conditional", title: "サンプル市こどもプラネタリウム", tag_ids: ["cooking"] });
   });
 
-  it("既存の会場に新しいイベントを足しても、会場・移動設定・お気に入りは変わらない（A15）", async () => {
+  it("既存の場所に候補を足しても、場所・移動設定・保存・家族設定は変わらない（A15 相当）", async () => {
+    // 行の内容だけを比べる（D1 の結果に付くメタ情報は DB サイズで変わる）
+    const rows = async (sql: string) => (await env.DB.prepare(sql).all()).results;
     const snapshot = async () =>
       JSON.stringify(
         await Promise.all([
-          env.DB.prepare("SELECT * FROM places WHERE id = 'pl-sample-science'").first(),
-          env.DB.prepare("SELECT * FROM travel_estimates WHERE place_id = 'pl-sample-science' ORDER BY id").all(),
-          env.DB.prepare("SELECT * FROM place_transport_preferences ORDER BY place_id, mode").all(),
-          env.DB.prepare("SELECT * FROM favorites ORDER BY profile_id, item_id").all(),
-          env.DB.prepare("SELECT * FROM family_settings").all(),
-          env.DB.prepare("SELECT * FROM profiles ORDER BY id").all(),
+          rows("SELECT * FROM places WHERE id = 'pl-sample-park'"),
+          rows("SELECT * FROM travel_estimates ORDER BY id"),
+          rows("SELECT * FROM place_transport_preferences ORDER BY place_id, mode"),
+          rows("SELECT * FROM bookmarks ORDER BY item_id"),
+          rows("SELECT * FROM family_settings"),
         ]),
       );
     const before = await snapshot();
     const b = clone();
-    // 既存場所の住所・座標を持ってきても反映しない
-    Object.assign(b.candidates[0]!.place!, { address_text: "別の住所" });
-    await apply(b);
+    // 既存場所の住所を持ってきても反映しない
+    Object.assign(b.candidates[3]!.place, { address_text: "別の住所" });
+    const r = await apply(b, [3]);
+    expect(r.outcomes[3]!.result).toBe("inserted");
     expect(await snapshot()).toBe(before);
   });
 
@@ -221,8 +223,8 @@ describe("apply（登録）", () => {
     for (const [i, c] of bundle.candidates.entries()) {
       const plan = planCandidate(
         c,
-        c.place?.existing_place_id ? { kind: "existing", id: c.place.existing_place_id } : c.place?.name ? { kind: "new", name: c.place.name } : { kind: "none" },
-        { itemId: `i${i}`, placeId: `p${i}`, sourceEntryId: `s${i}`, occurrenceIds: c.item.occurrences.map((_, j) => `o${i}-${j}`) },
+        c.place.existing_place_id ? { kind: "existing", id: c.place.existing_place_id } : { kind: "new", name: c.place.name! },
+        { itemId: `i${i}`, placeId: `p${i}`, sourceEntryId: `s${i}` },
         bundle.batch_id,
         "2026-09-29T00:00:00.000Z",
       );
@@ -230,18 +232,17 @@ describe("apply（登録）", () => {
         const sql = stmt.sql.trim();
         expect(sql).toMatch(/^INSERT INTO /);
         expect(sql).not.toMatch(/\b(UPDATE|DELETE|REPLACE|ON CONFLICT|DROP)\b/i);
-        const table = sql.match(/^INSERT INTO (\w+)/)![1]!;
-        expect(INGEST_WRITABLE_TABLES).toContain(table);
+        expect(INGEST_WRITABLE_TABLES).toContain(sql.match(/^INSERT INTO (\w+)/)![1]!);
       }
     }
   });
 
-  it("取り込んだ候補は一覧・地図・お気に入りでそのまま使える", async () => {
+  it("取り込んだ候補は一覧・保存でそのまま使える", async () => {
     const r = await apply(sample);
-    const id = r.outcomes[2]!.item_id!;
-    const list: ItemListResponse = await (await get("/api/items?tag_ids=reading")).json();
+    const id = r.outcomes[1]!.item_id!;
+    const list: ItemListResponse = await (await get("/api/items?category=park")).json();
     expect(list.items.map((i) => i.id)).toContain(id);
-    expect((await sendJson("PUT", `/api/profiles/pr-sora/favorites/${id}`, undefined)).status).toBe(204);
+    expect((await sendJson("PUT", `/api/bookmarks/${id}`, undefined)).status).toBe(204);
   });
 
   it("検証に通らない入力は何も書かない", async () => {

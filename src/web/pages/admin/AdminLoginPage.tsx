@@ -38,7 +38,8 @@ export function AdminLoginPage() {
 
   return (
     <main className="page admin">
-      <h1 className="page-title">おうちのひと 専用</h1>
+      <h1 className="page-title">管理画面</h1>
+      <p className="hint">編集には PIN が必要です。</p>
       <form className="pin-form" onSubmit={submit}>
         <label>
           PIN

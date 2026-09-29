@@ -10,9 +10,7 @@ import { AdminPlacePage, adminPlaceLoader } from "./pages/admin/AdminPlacePage";
 import { AdminSettingsPage, adminSettingsLoader } from "./pages/admin/AdminSettingsPage";
 import { ErrorPage } from "./pages/ErrorPage";
 import { ItemPage, itemLoader } from "./pages/ItemPage";
-import { ProfilePage, profilesLoader } from "./pages/ProfilePage";
 import { SearchPage, searchLoader } from "./pages/SearchPage";
-import { getSelectedProfileId } from "./profile";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -20,8 +18,9 @@ const router = createBrowserRouter([
     element: <Layout />,
     errorElement: <ErrorPage />,
     children: [
-      { path: "/", loader: () => redirect(getSelectedProfileId() ? "/search" : "/profiles") },
-      { path: "/profiles", element: <ProfilePage />, loader: profilesLoader },
+      { path: "/", loader: () => redirect("/search") },
+      // 以前のプロフィール選択画面の URL
+      { path: "/profiles", loader: () => redirect("/search") },
       { path: "/search", element: <SearchPage />, loader: searchLoader },
       { path: "/items/:id", element: <ItemPage />, loader: itemLoader },
       { path: "/admin/login", element: <AdminLoginPage /> },

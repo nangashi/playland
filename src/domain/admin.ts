@@ -1,22 +1,17 @@
 import { z } from "zod";
 import {
   ageBoundKinds,
-  dateSchema,
   durationBases,
   guardianRules,
   idSchema,
-  itemKinds,
   mediaKinds,
   modeVisibilities,
-  occurrencePrecisions,
-  occurrenceStatuses,
   positionAccuracies,
   priceStatuses,
   publishStatuses,
   rainPolicies,
   reservationRequirements,
   routeStatuses,
-  scheduleStatuses,
   siblingRules,
   tagAssessments,
   transportModes,
@@ -49,30 +44,6 @@ const optionalUrl = z
   .transform((v) => (v === "" || v === null ? null : v))
   .optional();
 const age = z.number().int().min(0).max(120);
-const isoDateTime = z.iso.datetime({ offset: true }).transform((v) => new Date(v).toISOString());
-
-export const occurrenceInputSchema = z
-  .object({
-    start_date: dateSchema,
-    end_date: dateSchema,
-    starts_at: isoDateTime.nullable().default(null),
-    ends_at: isoDateTime.nullable().default(null),
-    precision: z.enum(occurrencePrecisions),
-    status: z.enum(occurrenceStatuses).default("scheduled"),
-  })
-  .superRefine((o, ctx) => {
-    if (o.end_date < o.start_date) ctx.addIssue({ code: "custom", message: "終了日が開始日より前です" });
-    if (o.precision === "date" && (o.starts_at || o.ends_at)) {
-      ctx.addIssue({ code: "custom", message: "日付だけの開催に時刻は入れません" });
-    }
-    if (o.precision === "datetime" && !o.starts_at) {
-      ctx.addIssue({ code: "custom", message: "時刻ありの開催には開始時刻が必要です" });
-    }
-    if (o.starts_at && o.ends_at && o.ends_at < o.starts_at) {
-      ctx.addIssue({ code: "custom", message: "終了時刻が開始時刻より前です" });
-    }
-  });
-export type OccurrenceInput = z.infer<typeof occurrenceInputSchema>;
 
 export const itemPatchSchema = z
   .object({
@@ -90,8 +61,6 @@ export const itemPatchSchema = z
       .max(50)
       .transform((ids) => [...new Set(ids)])
       .optional(),
-    schedule_status: z.enum(scheduleStatuses).optional(),
-    occurrences: z.array(occurrenceInputSchema).max(200).optional(),
     age_min_kind: z.enum(ageBoundKinds).optional(),
     age_min: age.nullable().optional(),
     age_max_kind: z.enum(ageBoundKinds).optional(),
@@ -109,7 +78,7 @@ export const itemPatchSchema = z
   .strict();
 export type ItemPatch = z.infer<typeof itemPatchSchema>;
 
-/** items の列として直接更新できる項目（tag_ids / occurrences / version は別処理） */
+/** items の列として直接更新できる項目（tag_ids / version は別処理） */
 export const ITEM_PATCH_COLUMNS = [
   "title",
   "child_description",
@@ -119,7 +88,6 @@ export const ITEM_PATCH_COLUMNS = [
   "place_id",
   "facility_tags_status",
   "experience_tags_status",
-  "schedule_status",
   "age_min_kind",
   "age_min",
   "age_max_kind",
@@ -135,17 +103,16 @@ export const ITEM_PATCH_COLUMNS = [
   "price_text",
 ] as const satisfies readonly (keyof ItemPatch)[];
 
+/** 手動追加。常設スポットだけ（イベントは次のフェーズ）。場所は既存か新規のどちらか */
 export const itemCreateSchema = z
   .object({
-    kind: z.enum(itemKinds),
     title: text(200).min(1),
     official_url: optionalUrl,
-    place_id: idSchema.nullable().optional(),
+    place_id: idSchema.optional(),
     new_place_name: text(200).min(1).optional(),
   })
   .strict()
-  .refine((v) => !(v.place_id && v.new_place_name), "会場は既存か新規のどちらかにしてください")
-  .refine((v) => v.kind === "event" || v.place_id || v.new_place_name, "常設スポットには場所が必要です");
+  .refine((v) => (v.place_id === undefined) !== (v.new_place_name === undefined), "場所は既存か新規のどちらか一方を指定してください");
 export type ItemCreate = z.infer<typeof itemCreateSchema>;
 
 export const placePatchSchema = z
@@ -255,4 +222,3 @@ export type ItemCreateInput = z.input<typeof itemCreateSchema>;
 export type PlacePatchInput = z.input<typeof placePatchSchema>;
 export type TransportPatchInput = z.input<typeof transportPatchSchema>;
 export type SettingsPatchInput = z.input<typeof settingsPatchSchema>;
-export type OccurrenceInputValue = z.input<typeof occurrenceInputSchema>;

@@ -136,15 +136,8 @@ export interface ItemTagRecord {
   tag_id: string;
 }
 
-export interface ProfileRecord {
-  id: string;
-  display_name: string;
-  age_hint: number | null;
-  sort_order: number;
-}
-
-export interface FavoriteRecord {
-  profile_id: string;
+/** 家族で共有する保存（ブックマーク） */
+export interface BookmarkRecord {
   item_id: string;
   created_at: string;
 }

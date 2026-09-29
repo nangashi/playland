@@ -3,7 +3,6 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ItemCard as ItemCardData, MapVenue } from "../../domain/api";
 import { clusterScreenPoints } from "../../domain/map";
-import type { Purpose } from "../../domain/search";
 import { ItemCard } from "../components/ItemCard";
 import { BASE_TILES, FALLBACK_VIEW } from "./tiles";
 
@@ -11,9 +10,6 @@ interface Props {
   venues: MapVenue[];
   /** 表示位置を覚えておくためのキー（検索条件ごと） */
   viewKey: string;
-  purpose: Purpose;
-  profileId: string;
-  profileNames: Map<string, string>;
   onSavedChange: (itemId: string, saved: boolean) => void;
 }
 
@@ -46,11 +42,11 @@ function saveView(key: string, view: SavedView) {
 
 /**
  * アプリが持つ候補を独自マーカーで表示する地図。
- * - 同じ会場の候補は 1 つのマーカー（数字つき）にまとめる
- * - 画面上で近すぎる別々の会場は、形の違う「まとまり」マーカーにし、押すと拡大する
+ * - 同じ場所の候補は 1 つのマーカー（数字つき）にまとめる
+ * - 画面上で近すぎる別々の場所は、形の違う「まとまり」マーカーにし、押すと拡大する
  * - 選んだマーカーの候補は画面下のカードで見る
  */
-export function MapView({ venues, viewKey, purpose, profileId, profileNames, onSavedChange }: Props) {
+export function MapView({ venues, viewKey, onSavedChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -126,7 +122,7 @@ export function MapView({ venues, viewKey, purpose, profileId, profileNames, onS
       if (members.length === 1) {
         const v = members[0]!;
         const isSelected = selected.includes(v.place.id);
-        const mine = v.items.some((i) => i.saved_by_profile_ids.includes(profileId));
+        const mine = v.items.some((i) => i.saved);
         const marker = L.marker([v.place.latitude, v.place.longitude], {
           icon: L.divIcon({
             className: "",
@@ -145,11 +141,11 @@ export function MapView({ venues, viewKey, purpose, profileId, profileNames, onS
         const marker = L.marker(center, {
           icon: L.divIcon({
             className: "",
-            html: `<div class="cluster-marker"><span>${members.length}</span><small>かしょ</small></div>`,
+            html: `<div class="cluster-marker"><span>${members.length}</span><small>か所</small></div>`,
             iconSize: [52, 52],
             iconAnchor: [26, 26],
           }),
-          title: `${members.length} かしょ`,
+          title: `${members.length} か所`,
           keyboard: true,
         });
         marker.on("click", () => {
@@ -164,37 +160,30 @@ export function MapView({ venues, viewKey, purpose, profileId, profileNames, onS
         layer.addLayer(marker);
       }
     }
-  }, [venues, venueById, zoom, selected, profileId]);
+  }, [venues, venueById, zoom, selected]);
 
   const selectedVenues = selected.map((id) => venueById.get(id)).filter((v): v is MapVenue => v !== undefined);
 
   return (
     <div className="map-wrap">
-      <div ref={containerRef} className="map" role="region" aria-label="ちず" />
+      <div ref={containerRef} className="map" role="region" aria-label="地図" />
       {selectedVenues.length > 0 && (
-        <section className="map-sheet" aria-label="えらんだ ばしょ">
-          <button type="button" className="map-sheet-close" onClick={() => setSelected([])} aria-label="とじる">
+        <section className="map-sheet" aria-label="選んだ場所">
+          <button type="button" className="map-sheet-close" onClick={() => setSelected([])} aria-label="閉じる">
             ×
           </button>
           {selectedVenues.map((v) => (
             <div key={v.place.id} className="map-sheet-venue">
               <h2 className="map-sheet-title">
                 {v.place.name}
-                {v.items.length > 1 && <span className="muted">（{v.items.length}けん）</span>}
+                {v.items.length > 1 && <span className="muted">（{v.items.length}件）</span>}
               </h2>
               {v.place.position_accuracy === "approximate" && (
-                <p className="muted">ちずの いちは おおよそ です</p>
+                <p className="muted">地図上の位置はおおよそです</p>
               )}
               <div className="map-sheet-cards">
                 {v.items.map((item: ItemCardData) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    purpose={purpose}
-                    profileId={profileId}
-                    profileNames={profileNames}
-                    onSavedChange={onSavedChange}
-                  />
+                  <ItemCard key={item.id} item={item} onSavedChange={onSavedChange} />
                 ))}
               </div>
             </div>

@@ -1,16 +1,12 @@
-import { Component, lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, redirect, useLoaderData, useSearchParams, type LoaderFunctionArgs } from "react-router";
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { Link, useLoaderData, useSearchParams, type LoaderFunctionArgs } from "react-router";
 import type { ItemCard as ItemCardData, MapItemsResponse } from "../../domain/api";
-import { favoritesLabel, purposeLabel } from "../../domain/labels";
-import { favoritesFilters, purposes } from "../../domain/search";
-import { ENTRANCES } from "../../domain/tags";
-import { fetchItems, fetchMapItems, fetchProfiles, fetchSettings } from "../api";
-import { FilterPanel } from "../components/FilterPanel";
+import { fetchItems, fetchMapItems, fetchSettings } from "../api";
+import { FilterBar } from "../components/FilterBar";
 import { ItemCard } from "../components/ItemCard";
-import { getSelectedProfileId } from "../profile";
 import {
   activeConditions,
-  conditionLabel,
+  CLEARED,
   MAX_PAGES,
   mapViewKey,
   readSearchState,
@@ -24,36 +20,23 @@ import {
 const MapView = lazy(() => import("../map/MapView").then((m) => ({ default: m.MapView })));
 
 export async function searchLoader({ request }: LoaderFunctionArgs) {
-  const profileId = getSelectedProfileId();
-  if (!profileId) throw redirect("/profiles");
   const state = readSearchState(new URL(request.url).searchParams);
-
-  const [{ profiles }, settings] = await Promise.all([fetchProfiles(request.signal), fetchSettings(request.signal)]);
-  const profile = profiles.find((p) => p.id === profileId);
-  if (!profile) throw redirect("/profiles");
-
+  const settings = await fetchSettings(request.signal);
   if (state.view === "map") {
-    const map = await fetchMapItems(toMapApiParams(state, profile), request.signal);
-    return { state, profile, profiles, settings, items: [] as ItemCardData[], total: map.total, map };
+    const map = await fetchMapItems(toMapApiParams(state), request.signal);
+    return { state, settings, items: [] as ItemCardData[], total: map.total, map };
   }
-  // 「もっと みる」で読んだページも含めて取り直すことで、詳細から戻ったときに同じ一覧になる
+  // 「もっと見る」で読んだページも含めて取り直すことで、詳細から戻ったときに同じ一覧になる
   const results = await Promise.all(
-    Array.from({ length: state.pages }, (_, i) => fetchItems(toApiParams(state, profile, i), request.signal)),
+    Array.from({ length: state.pages }, (_, i) => fetchItems(toApiParams(state, i), request.signal)),
   );
   return {
     state,
-    profile,
-    profiles,
     settings,
     items: results.flatMap((r) => r.items),
     total: results[0]?.total ?? 0,
     map: null as MapItemsResponse | null,
   };
-}
-
-function withSaved(item: ItemCardData, profileId: string, saved: boolean): ItemCardData {
-  const others = item.saved_by_profile_ids.filter((id) => id !== profileId);
-  return { ...item, saved_by_profile_ids: saved ? [...others, profileId].sort() : others };
 }
 
 export function SearchPage() {
@@ -65,116 +48,55 @@ export function SearchPage() {
   useEffect(() => setItems(data.items), [data.items]);
   useEffect(() => setMap(data.map), [data.map]);
 
-  const profileNames = useMemo(
-    () => new Map(data.profiles.map((p) => [p.id, p.display_name])),
-    [data.profiles],
-  );
-
   function update(next: Partial<SearchState>, options: { keepPages?: boolean } = {}) {
     const merged = { ...state, ...next, pages: options.keepPages ? (next.pages ?? state.pages) : 1 };
-    setSearchParams(writeSearchState(merged), {
-      replace: options.keepPages,
-      preventScrollReset: options.keepPages,
-    });
+    setSearchParams(writeSearchState(merged), { replace: options.keepPages, preventScrollReset: options.keepPages });
   }
 
-  // 保存を外しても、その場ではカードを消さない（押した指の下から消えないように）
+  // 保存を外しても、その場ではカードを消さない（押した場所から消えないように）
   function onSavedChange(itemId: string, saved: boolean) {
-    const pid = data.profile.id;
-    setItems((current) => current.map((item) => (item.id === itemId ? withSaved(item, pid, saved) : item)));
+    const patch = (item: ItemCardData) => (item.id === itemId ? { ...item, saved } : item);
+    setItems((current) => current.map(patch));
     setMap((current) =>
-      current
-        ? {
-            ...current,
-            venues: current.venues.map((v) => ({
-              ...v,
-              items: v.items.map((item) => (item.id === itemId ? withSaved(item, pid, saved) : item)),
-            })),
-          }
-        : current,
+      current ? { ...current, venues: current.venues.map((v) => ({ ...v, items: v.items.map(patch) })) } : current,
     );
   }
 
-  function toggleEntrance(id: string) {
-    const entrances = state.entrances.includes(id)
-      ? state.entrances.filter((e) => e !== id)
-      : [...state.entrances, id];
-    update({ entrances });
-  }
-
+  const conditions = activeConditions(state);
   const hasMore = items.length < data.total && state.pages < MAX_PAGES;
   const firstUnknown = items.findIndex((i) => i.unknown.length > 0);
-  const firstFinished = items.findIndex((i) => i.finished);
 
   return (
     <main className="page">
       <header className="topbar">
-        <h1 className="app-title">おでかけ みつけた</h1>
-        <div className="topbar-actions">
-          <Link to="/admin" className="parent-link">
-            おうちのひと
-          </Link>
-          <Link to="/profiles" className="profile-chip" aria-label="さがす ひとを かえる">
-            {data.profile.display_name}
-          </Link>
-        </div>
+        <h1 className="app-title">おでかけ候補</h1>
+        <Link to="/admin" className="topbar-link">
+          管理
+        </Link>
       </header>
 
-      <nav className="segmented segmented-2" aria-label="いつ いく？">
-        {purposes.map((p) => (
-          <button
-            key={p}
-            type="button"
-            className={p === state.purpose ? "is-active" : ""}
-            aria-pressed={p === state.purpose}
-            onClick={() => update({ purpose: p })}
-          >
-            {purposeLabel[p]}
-          </button>
-        ))}
-      </nav>
-
-      <div className="entrances" role="group" aria-label="なにを する？">
-        {ENTRANCES.map((e) => {
-          const active = state.entrances.includes(e.id);
-          return (
-            <button
-              key={e.id}
-              type="button"
-              className={active ? "entrance is-active" : "entrance"}
-              aria-pressed={active}
-              onClick={() => toggleEntrance(e.id)}
-            >
-              <span className="entrance-icon" aria-hidden>
-                {e.icon}
-              </span>
-              <span>{e.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <nav className="segmented" aria-label="ほぞんした ばしょで しぼる">
-        {favoritesFilters.map((f) => (
-          <button
-            key={f}
-            type="button"
-            className={f === state.favorites ? "is-active" : ""}
-            aria-pressed={f === state.favorites}
-            onClick={() => update({ favorites: f })}
-          >
-            {favoritesLabel[f]}
-          </button>
-        ))}
-      </nav>
-
-      <FilterPanel state={state} profile={data.profile} settings={data.settings} onChange={update} />
+      <FilterBar state={state} settings={data.settings} onChange={update} />
 
       <div className="result-bar">
-        <p className="result-count" aria-live="polite">
-          {data.total} けん
-        </p>
-        <div className="view-toggle" role="group" aria-label="みかた">
+        <div className="result-count">
+          <span aria-live="polite">
+            <strong>{data.total}</strong> 件
+          </span>
+          <label className="inline-check" title="雨・年齢・移動などの情報が未登録で、条件に合うか分からない候補も後ろに表示します">
+            <input
+              type="checkbox"
+              checked={state.includeUnknown}
+              onChange={(e) => update({ includeUnknown: e.target.checked })}
+            />
+            不明も表示
+          </label>
+          {(conditions.length > 0 || state.includeUnknown) && (
+            <button type="button" className="text-button" onClick={() => update(CLEARED)}>
+              条件をクリア
+            </button>
+          )}
+        </div>
+        <div className="view-toggle" role="group" aria-label="表示形式">
           <button
             type="button"
             className={state.view === "list" ? "is-active" : ""}
@@ -189,66 +111,43 @@ export function SearchPage() {
             aria-pressed={state.view === "map"}
             onClick={() => update({ view: "map" })}
           >
-            ちず
+            地図
           </button>
         </div>
       </div>
 
-      {state.view === "map" && map ? (
+      {data.total === 0 ? (
+        <EmptyResult state={state} onChange={update} />
+      ) : state.view === "map" && map ? (
         <>
           <MapNotes map={map} onShowList={() => update({ view: "list" })} />
-          {data.total === 0 ? (
-            <EmptyResult state={state} onChange={update} />
-          ) : (
-            <MapBoundary onShowList={() => update({ view: "list" })}>
-              <Suspense fallback={<div className="map map-loading">ちずを よみこんでいます…</div>}>
-                <MapView
-                  venues={map.venues}
-                  viewKey={mapViewKey(state)}
-                  purpose={state.purpose}
-                  profileId={data.profile.id}
-                  profileNames={profileNames}
-                  onSavedChange={onSavedChange}
-                />
-              </Suspense>
-            </MapBoundary>
-          )}
+          <MapBoundary onShowList={() => update({ view: "list" })}>
+            <Suspense fallback={<div className="map map-loading">地図を読み込んでいます…</div>}>
+              <MapView venues={map.venues} viewKey={mapViewKey(state)} onSavedChange={onSavedChange} />
+            </Suspense>
+          </MapBoundary>
         </>
       ) : (
         <>
-          {items.length === 0 ? (
-            <EmptyResult state={state} onChange={update} />
-          ) : (
-            <div className="card-list">
-              {items.map((item, index) => (
-                <div key={item.id} className="card-slot">
-                  {index === firstUnknown && index !== firstFinished && (
-                    <h2 className="group-heading">わからない ところが ある ばしょ</h2>
-                  )}
-                  {index === firstFinished && <h2 className="group-heading">おわった イベント</h2>}
-                  <ItemCard
-                    item={item}
-                    purpose={state.purpose}
-                    profileId={data.profile.id}
-                    profileNames={profileNames}
-                    onSavedChange={onSavedChange}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
+          <div className="card-list">
+            {items.map((item, index) => (
+              <div key={item.id} className="card-slot">
+                {index === firstUnknown && <h2 className="group-heading">条件に合うか不明な候補</h2>}
+                <ItemCard item={item} onSavedChange={onSavedChange} />
+              </div>
+            ))}
+          </div>
           {hasMore && (
             <button
               type="button"
               className="more-button"
               onClick={() => update({ pages: state.pages + 1 }, { keepPages: true })}
             >
-              もっと みる
+              もっと見る（残り {data.total - items.length} 件）
             </button>
           )}
           {items.length < data.total && !hasMore && (
-            <p className="result-note">ここまで {items.length} けんを ひょうじ しています</p>
+            <p className="result-note">{items.length} 件まで表示しています。条件を絞ってください。</p>
           )}
         </>
       )}
@@ -256,30 +155,29 @@ export function SearchPage() {
   );
 }
 
-/** 地図に出せない候補・出さなかった会場を必ず知らせる（地図のために候補を消さない） */
+/** 地図に出せない候補・出さなかった場所を必ず知らせる（地図のために候補を消さない） */
 function MapNotes({ map, onShowList }: { map: MapItemsResponse; onShowList: () => void }) {
   if (map.unpositioned === 0 && map.omitted_venues === 0) return null;
   return (
-    <div className="map-notes">
+    <div className="notice">
       {map.unpositioned > 0 && (
         <p>
-          ばしょが わからず ちずに だせない ものが {map.unpositioned}けん あります。
+          位置が未登録のため地図に表示できない候補が {map.unpositioned} 件あります。
           <button type="button" className="text-button" onClick={onShowList}>
-            リストで みる
+            リストで見る
           </button>
         </p>
       )}
       {map.omitted_venues > 0 && (
         <p>
-          ちずには {map.max_markers}かしょ まで ひょうじ しています（のこり {map.omitted_venues}かしょ）。じょうけんを
-          しぼるか、リストで みてね。
+          地図には {map.max_markers} か所まで表示しています（残り {map.omitted_venues} か所）。条件を絞るか、リストで確認してください。
         </p>
       )}
     </div>
   );
 }
 
-/** 地図の読み込み・表示に失敗しても、一覧とお気に入りは使えるようにする */
+/** 地図の読み込み・表示に失敗しても、一覧と保存は使えるようにする */
 class MapBoundary extends Component<{ children: ReactNode; onShowList: () => void }, { failed: boolean }> {
   state = { failed: false };
 
@@ -295,9 +193,9 @@ class MapBoundary extends Component<{ children: ReactNode; onShowList: () => voi
     if (!this.state.failed) return this.props.children;
     return (
       <div className="empty">
-        <p>ちずを ひょうじ できなかったよ</p>
+        <p>地図を表示できませんでした。</p>
         <button type="button" className="secondary-button" onClick={this.props.onShowList}>
-          リストで みる
+          リストで見る
         </button>
       </div>
     );
@@ -307,27 +205,22 @@ class MapBoundary extends Component<{ children: ReactNode; onShowList: () => voi
 /** 条件を勝手に外さず、どれを外すかを選べるようにする */
 function EmptyResult({ state, onChange }: { state: SearchState; onChange: (next: Partial<SearchState>) => void }) {
   const conditions = activeConditions(state);
+  if (conditions.length === 0) return <p className="empty">まだ候補が登録されていません。</p>;
   return (
     <div className="empty">
-      {conditions.length === 0 ? (
-        <p>まだ ばしょが とうろく されていないよ</p>
-      ) : (
-        <>
-          <p>この じょうけんに あう ばしょは みつからなかったよ。どれか はずしてみる？</p>
-          <div className="chip-row">
-            {conditions.map((c) => (
-              <button key={c.key} type="button" className="secondary-button" onClick={() => onChange(c.reset)}>
-                「{conditionLabel[c.key]}」を はずす
-              </button>
-            ))}
-            {!state.includeUnknown && (
-              <button type="button" className="secondary-button" onClick={() => onChange({ includeUnknown: true })}>
-                わからない ものも みる
-              </button>
-            )}
-          </div>
-        </>
-      )}
+      <p>条件に合う候補がありません。外す条件を選んでください。</p>
+      <div className="chip-wrap is-centered">
+        {conditions.map((c) => (
+          <button key={c.label} type="button" className="chip" onClick={() => onChange(c.reset)}>
+            「{c.label}」を外す
+          </button>
+        ))}
+        {!state.includeUnknown && (
+          <button type="button" className="chip" onClick={() => onChange({ includeUnknown: true })}>
+            情報が不明なものも表示
+          </button>
+        )}
+      </div>
     </div>
   );
 }

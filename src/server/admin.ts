@@ -67,23 +67,21 @@ adminApi.get("/items/:id", async (c) => {
   const db = c.env.DB;
   const item = await repo.getItem(db, id.data);
   if (!item) return notFound(c);
-  const [tags, occurrences, place, media] = await Promise.all([
+  const [tags, place, media] = await Promise.all([
     repo.listItemTags(db, item.id),
-    repo.listOccurrences(db, item.id),
     item.place_id ? repo.getPlace(db, item.place_id) : null,
     repo.listMediaFor(db, { itemId: item.id, placeId: null }, true),
   ]);
   const body: AdminItemResponse = {
     item,
     tag_ids: tags.map((t) => t.tag_id).sort(),
-    occurrences: occurrences.map(({ item_id: _, ...o }) => o),
     place,
     media,
   };
   return c.json(body);
 });
 
-/** 手動追加。URL とタイトルだけでも作れる。分からない項目は unknown のまま */
+/** 手動追加（常設スポット）。URL とタイトルと場所だけでも作れる。分からない項目は unknown のまま */
 adminApi.post("/items", async (c) => {
   const input = await parseJson(c, itemCreateSchema);
   if (!input) return c.json({ error: "invalid" }, 400);
@@ -109,10 +107,10 @@ adminApi.post("/items", async (c) => {
       .prepare(
         `INSERT INTO items (id, kind, place_id, title, official_url, publish_status,
                             initialized_at, parent_reviewed_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?)`,
+         VALUES (?, 'spot', ?, ?, ?, 'published', ?, ?, ?, ?)`,
       )
-      .bind(itemId, input.kind, placeId, input.title, input.official_url ?? null, now, now, now, now),
-    audit(db, c, "item", itemId, "create", 1, ["kind", "title", "official_url", "place_id"], now),
+      .bind(itemId, placeId, input.title, input.official_url ?? null, now, now, now, now),
+    audit(db, c, "item", itemId, "create", 1, ["title", "official_url", "place_id"], now),
   );
   const res = await runWrite(c, () => db.batch(stmts));
   if (res) return res;
@@ -127,9 +125,6 @@ adminApi.patch("/items/:id", async (c) => {
   const db = c.env.DB;
   const current = await repo.getItem(db, id.data);
   if (!current) return notFound(c);
-  if (current.kind === "spot" && (input.occurrences || input.schedule_status)) {
-    return c.json({ error: "常設スポットに開催日は設定できません" }, 400);
-  }
 
   const now = new Date().toISOString();
   const { version } = input;
@@ -147,34 +142,6 @@ adminApi.patch("/items/:id", async (c) => {
       );
     }
   }
-  if (input.occurrences) {
-    stmts.push(
-      db.prepare(`DELETE FROM event_occurrences WHERE item_id = ? AND ${guard}`).bind(id.data, id.data, version),
-    );
-    for (const o of input.occurrences) {
-      stmts.push(
-        db
-          .prepare(
-            `INSERT INTO event_occurrences
-               (id, item_id, start_date, end_date, starts_at, ends_at, precision, status)
-             SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard}`,
-          )
-          .bind(
-            crypto.randomUUID(),
-            id.data,
-            o.start_date,
-            o.end_date,
-            o.starts_at,
-            o.ends_at,
-            o.precision,
-            o.status,
-            id.data,
-            version,
-          ),
-      );
-    }
-  }
-
   const changed = Object.keys(input).filter((k) => k !== "version");
   stmts.push(auditGuarded(db, c, "item", id.data, version, changed, now, guard, [id.data, version]));
 

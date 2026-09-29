@@ -13,13 +13,12 @@ export interface PlannedStatement {
 }
 
 /** 取り込みが書き込んでよい表（お気に入り・プロフィール・家族設定・移動・写真には書かない） */
-export const INGEST_WRITABLE_TABLES = ["places", "items", "item_tags", "event_occurrences", "source_entries"] as const;
+export const INGEST_WRITABLE_TABLES = ["places", "items", "item_tags", "source_entries"] as const;
 
 export interface PlanIds {
   itemId: string;
   placeId: string;
   sourceEntryId: string;
-  occurrenceIds: string[];
 }
 
 /** 1 候補を登録する文の一覧（1 つの D1 batch = 1 トランザクションで実行する） */
@@ -35,9 +34,9 @@ export function planCandidate(
   let placeId: string | null = null;
 
   if (place.kind === "existing") {
-    // 既存の場所は参照するだけ。住所・座標・雨天・移動設定をイベント取得の副作用で変えない
+    // 既存の場所は参照するだけ。住所・座標・移動設定を取り込みの副作用で変えない
     placeId = place.id;
-  } else if (place.kind === "new" && candidate.place) {
+  } else if (place.kind === "new") {
     placeId = ids.placeId;
     const p = candidate.place;
     stmts.push({
@@ -50,15 +49,14 @@ export function planCandidate(
 
   stmts.push({
     sql: `INSERT INTO items (id, kind, place_id, title, child_description, rain_policy, publish_status,
-                             official_url, facility_tags_status, experience_tags_status, schedule_status,
+                             official_url, facility_tags_status, experience_tags_status,
                              age_min_kind, age_min, age_max_kind, age_max, eligibility_raw_text,
                              guardian_rule, sibling_rule, recommended_age_min, recommended_age_max,
                              reservation_requirement, reservation_note, price_status, price_text,
                              initialized_at, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, 'spot', ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       ids.itemId,
-      item.kind,
       placeId,
       item.title,
       item.child_description,
@@ -66,7 +64,6 @@ export function planCandidate(
       item.official_url ?? source.url,
       item.facility_tags_status,
       item.experience_tags_status,
-      item.kind === "event" ? item.schedule_status : "unknown",
       item.age_min_kind,
       item.age_min,
       item.age_max_kind,
@@ -89,14 +86,6 @@ export function planCandidate(
   for (const tagId of [...new Set(item.tag_ids)]) {
     stmts.push({ sql: `INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)`, params: [ids.itemId, tagId] });
   }
-  item.occurrences.forEach((o, i) => {
-    stmts.push({
-      sql: `INSERT INTO event_occurrences (id, item_id, start_date, end_date, starts_at, ends_at, precision, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [ids.occurrenceIds[i], ids.itemId, o.start_date, o.end_date, o.starts_at, o.ends_at, o.precision, o.status],
-    });
-  });
-
   // 出典キーの一意制約により、同じ候補の二重登録はトランザクションごと失敗する
   stmts.push({
     sql: `INSERT INTO source_entries (id, item_id, source_id, source_key, url, fetched_at, evidence,
@@ -191,7 +180,6 @@ export async function applyBundle(db: D1Database, raw: unknown, options: ApplyOp
       itemId: newId(),
       placeId: newId(),
       sourceEntryId: newId(),
-      occurrenceIds: candidate.item.occurrences.map(() => newId()),
     };
     const plan = planCandidate(candidate, match.place, ids, bundle.batch_id, now().toISOString());
     try {

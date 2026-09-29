@@ -1,6 +1,5 @@
 import type {
   ItemRecord,
-  OccurrenceRecord,
   TransportPreferenceRecord,
   TravelEstimateRecord,
 } from "../src/domain/model";
@@ -41,30 +40,6 @@ export function makeItem(id: string, overrides: Partial<ItemRecord> = {}): ItemR
   };
 }
 
-export function makeEvent(id: string, overrides: Partial<ItemRecord> = {}): ItemRecord {
-  return makeItem(id, { kind: "event", schedule_status: "known", ...overrides });
-}
-
-let occSeq = 0;
-export function occ(
-  itemId: string,
-  start: string,
-  end = start,
-  overrides: Partial<OccurrenceRecord> = {},
-): OccurrenceRecord {
-  return {
-    id: `oc-${++occSeq}`,
-    item_id: itemId,
-    start_date: start,
-    end_date: end,
-    starts_at: null,
-    ends_at: null,
-    precision: "date",
-    status: "scheduled",
-    ...overrides,
-  };
-}
-
 export function estimate(
   placeId: string,
   mode: TravelEstimateRecord["mode"],
@@ -99,8 +74,7 @@ export function data(overrides: Partial<SearchData> = {}): SearchData {
   return {
     items: [],
     itemTags: [],
-    occurrences: [],
-    favorites: [],
+    bookmarks: [],
     preferences: [],
     estimates: [],
     settings: { origin_version: 1, bicycle_max_minutes: 20 },

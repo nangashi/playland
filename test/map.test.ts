@@ -22,9 +22,9 @@ describe("buildVenueGroups", () => {
   const entries = [
     { item: makeItem("b1", { place_id: "pb" }) },
     { item: makeItem("a1", { place_id: "pa" }) },
-    { item: makeItem("a2", { kind: "event", place_id: "pa" }) },
+    { item: makeItem("a2", { place_id: "pa" }) },
     { item: makeItem("x", { place_id: "no-coords" }) },
-    { item: makeItem("y", { kind: "event", place_id: null }) },
+    { item: makeItem("y", { place_id: null }) },
   ];
 
   it("同じ会場の候補を 1 つにまとめ、検索の並び順を保つ", () => {
@@ -75,7 +75,7 @@ describe("GET /api/map-items", () => {
   }
 
   it("一覧と同じ条件・同じ候補集合を使う（A13）", async () => {
-    for (const q of ["", "?rain=ok", "?purpose=today", "?favorites=family", "?tag_ids=park,science_museum"]) {
+    for (const q of ["", "?rain=ok", "?saved=true", "?category=animals", "?category=make&include_unknown=true"]) {
       const body = await map(q);
       const ids = body.venues.flatMap((v) => v.items.map((i) => i.id));
       const list = await listIds(q);
@@ -85,16 +85,23 @@ describe("GET /api/map-items", () => {
     }
   });
 
-  it("同じ会場の常設スポットとイベントを 1 つのマーカーから選べる", async () => {
+  it("同じ場所の候補は 1 つのマーカーから選べる", async () => {
+    const now = "2026-09-20T00:00:00.000Z";
+    await env.DB.prepare(
+      `INSERT INTO items (id, kind, place_id, title, publish_status, created_at, updated_at)
+       VALUES ('it-science-annex', 'spot', 'pl-sample-science', '別館の工作室', 'published', ?, ?)`,
+    )
+      .bind(now, now)
+      .run();
     const body = await map();
     const science = body.venues.find((v) => v.place.id === "pl-sample-science");
-    expect(science?.items.map((i) => i.id).sort()).toEqual(["it-science-slime", "it-science-spot"]);
+    expect(science?.items.map((i) => i.id).sort()).toEqual(["it-science-annex", "it-science-spot"]);
     expect(body.venues.find((v) => v.place.id === "pl-sample-park")?.place.position_accuracy).toBe("approximate");
   });
 
-  it("位置不明の候補は件数で分かる（会場の座標なし・会場不明）", async () => {
+  it("位置不明の候補は件数で分かる", async () => {
     const body = await map();
-    // it-gym-spot（座標なし）と it-wood-event（会場不明）
+    // it-gym-spot と it-farm-spot（場所の座標なし）
     expect(body.unpositioned).toBe(2);
   });
 
@@ -103,7 +110,7 @@ describe("GET /api/map-items", () => {
     const stmts = Array.from({ length: 40 }, (_, i) =>
       env.DB.prepare(
         `INSERT INTO items (id, kind, place_id, title, publish_status, created_at, updated_at)
-         VALUES (?, 'event', 'pl-sample-park', ?, 'published', ?, ?)`,
+         VALUES (?, 'spot', 'pl-sample-park', ?, 'published', ?, ?)`,
       ).bind(`it-bulk-${i}`, `まとめて ${i}`, now, now),
     );
     await env.DB.batch(stmts);
@@ -111,11 +118,11 @@ describe("GET /api/map-items", () => {
     expect(list.items.length).toBe(30);
     const body = await map();
     const park = body.venues.find((v) => v.place.id === "pl-sample-park");
-    expect(park?.items.length).toBe(42);
+    expect(park?.items.length).toBe(41);
   });
 
   it("不正な条件は 400", async () => {
-    expect((await get("/api/map-items?rain=maybe")).status).toBe(400);
+    expect((await get("/api/map-items?category=nope")).status).toBe(400);
   });
 
   it("自宅の座標は地図 API に含めない（A21）", async () => {

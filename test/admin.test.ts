@@ -23,14 +23,9 @@ describe("親の権限（A18）", () => {
     expect((await get("/api/admin/items/it-gym-spot")).status).toBe(401);
     expect((await get("/api/admin/settings")).status).toBe(401);
     expect((await sendJson("PATCH", "/api/admin/items/it-gym-spot", { version: 1, rain_policy: "ok" })).status).toBe(401);
-    expect((await sendJson("POST", "/api/admin/items", { kind: "event", title: "x" })).status).toBe(401);
-    const { results } = await env.DB.prepare("SELECT rain_policy FROM items WHERE id = 'it-gym-spot'").all();
-    expect(results[0]).toEqual({ rain_policy: "unknown" });
-  });
-
-  it("プロフィールの指定は権限にならない", async () => {
-    const res = await get("/api/admin/settings?profile_id=pr-parent", { headers: { "X-Profile-Id": "pr-parent" } });
-    expect(res.status).toBe(401);
+    expect((await sendJson("POST", "/api/admin/items", { title: "x", new_place_name: "y" })).status).toBe(401);
+    const row = await env.DB.prepare("SELECT rain_policy FROM items WHERE id = 'it-gym-spot'").first();
+    expect(row).toEqual({ rain_policy: "unknown" });
   });
 
   it("PIN が違えば拒否し、5 回失敗すると正しい PIN でも一時的に拒否", async () => {
@@ -88,17 +83,17 @@ describe("親の権限（A18）", () => {
 });
 
 describe("候補の編集", () => {
-  it("指定した項目だけを変え、版を上げ、お気に入りは変えない", async () => {
+  it("指定した項目だけを変え、版を上げ、保存は変えない", async () => {
     const headers = await parentLogin();
-    const before = await adminItem("it-science-slime", headers);
+    const before = await adminItem("it-woodshop-spot", headers);
     const res = await sendJson(
       "PATCH",
-      "/api/admin/items/it-science-slime",
+      "/api/admin/items/it-woodshop-spot",
       { version: before.item.version, rain_policy: "conditional", tag_ids: ["crafting"], experience_tags_status: "assessed" },
       headers,
     );
     expect(res.status).toBe(200);
-    const after = await adminItem("it-science-slime", headers);
+    const after = await adminItem("it-woodshop-spot", headers);
     expect(after.item).toMatchObject({
       rain_policy: "conditional",
       version: before.item.version + 1,
@@ -107,115 +102,56 @@ describe("候補の編集", () => {
     });
     expect(after.item.parent_reviewed_at).not.toBeNull();
     expect(after.tag_ids).toEqual(["crafting"]);
-    expect(after.occurrences).toEqual(before.occurrences);
-    const { results } = await env.DB.prepare("SELECT profile_id FROM favorites WHERE item_id = 'it-science-slime'").all();
-    expect(results).toEqual([{ profile_id: "pr-sora" }]);
+    const { results } = await env.DB.prepare("SELECT item_id FROM bookmarks ORDER BY item_id").all();
+    expect(results).toEqual([{ item_id: "it-park-spot" }, { item_id: "it-science-spot" }]);
   });
 
-  it("古い版での編集は上書きせず 409。タグ・開催日も変えない", async () => {
+  it("古い版での編集は上書きせず 409。タグも変えない", async () => {
     const headers = await parentLogin();
-    const before = await adminItem("it-science-slime", headers);
-    await sendJson("PATCH", "/api/admin/items/it-science-slime", { version: before.item.version, title: "先の変更" }, headers);
+    const before = await adminItem("it-science-spot", headers);
+    await sendJson("PATCH", "/api/admin/items/it-science-spot", { version: before.item.version, title: "先の変更" }, headers);
 
     const res = await sendJson(
       "PATCH",
-      "/api/admin/items/it-science-slime",
-      {
-        version: before.item.version,
-        title: "後の変更",
-        tag_ids: ["cooking"],
-        occurrences: [{ start_date: "2026-12-01", end_date: "2026-12-01", precision: "date" }],
-      },
+      "/api/admin/items/it-science-spot",
+      { version: before.item.version, title: "後の変更", tag_ids: ["cooking"] },
       headers,
     );
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ current_version: before.item.version + 1 });
-    const after = await adminItem("it-science-slime", headers);
+    const after = await adminItem("it-science-spot", headers);
     expect(after.item.title).toBe("先の変更");
     expect(after.tag_ids).toEqual(before.tag_ids);
-    expect(after.occurrences).toEqual(before.occurrences);
-    const { results } = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM audit_log WHERE target_id = 'it-science-slime'",
-    ).all<{ n: number }>();
-    expect(results[0]?.n).toBe(1);
-  });
-
-  it("開催日を置き換え、離れた日付は別の回として保存する", async () => {
-    const headers = await parentLogin();
-    const { item } = await adminItem("it-science-slime", headers);
-    const res = await sendJson(
-      "PATCH",
-      "/api/admin/items/it-science-slime",
-      {
-        version: item.version,
-        occurrences: [
-          { start_date: "2026-11-01", end_date: "2026-11-01", precision: "date" },
-          {
-            start_date: "2026-11-15",
-            end_date: "2026-11-15",
-            precision: "datetime",
-            starts_at: "2026-11-15T10:00:00+09:00",
-            ends_at: "2026-11-15T12:00:00+09:00",
-          },
-        ],
-      },
-      headers,
-    );
-    expect(res.status).toBe(200);
-    const after = await adminItem("it-science-slime", headers);
-    expect(after.occurrences.map((o) => [o.start_date, o.end_date, o.starts_at])).toEqual([
-      ["2026-11-01", "2026-11-01", null],
-      ["2026-11-15", "2026-11-15", "2026-11-15T01:00:00.000Z"],
-    ]);
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE target_id = 'it-science-spot'").first<{ n: number }>();
+    expect(row?.n).toBe(1);
   });
 
   it("矛盾する入力は 400 で拒否し、何も変えない", async () => {
     const headers = await parentLogin();
-    const { item } = await adminItem("it-science-slime", headers);
+    const { item } = await adminItem("it-woodshop-spot", headers);
     const bad = [
-      // 日付だけの開催に時刻
-      { occurrences: [{ start_date: "2026-11-01", end_date: "2026-11-01", precision: "date", starts_at: "2026-11-01T10:00:00+09:00" }] },
-      // 終了日が先
-      { occurrences: [{ start_date: "2026-11-02", end_date: "2026-11-01", precision: "date" }] },
-      // 存在しない日付
-      { occurrences: [{ start_date: "2026-02-30", end_date: "2026-02-30", precision: "date" }] },
-      // 年齢の種別と値の不整合
       { age_min_kind: "value", age_min: null },
       { age_min_kind: "value", age_min: 10, age_max_kind: "value", age_max: 5 },
-      // 未定義のタグ
       { tag_ids: ["not_a_tag"] },
-      // 未定義の項目
       { publish_at: "now" },
-      // javascript: URL
+      // 開催日は次のフェーズまで受け付けない
+      { occurrences: [] },
       { official_url: "javascript:alert(1)" },
-      // 存在しない会場
       { place_id: "pl-nowhere" },
     ];
     for (const patch of bad) {
-      const res = await sendJson("PATCH", "/api/admin/items/it-science-slime", { version: item.version, ...patch }, headers);
+      const res = await sendJson("PATCH", "/api/admin/items/it-woodshop-spot", { version: item.version, ...patch }, headers);
       expect(res.status, JSON.stringify(patch)).toBe(400);
     }
-    const after = await adminItem("it-science-slime", headers);
-    expect(after.item.version).toBe(item.version);
+    expect((await adminItem("it-woodshop-spot", headers)).item.version).toBe(item.version);
   });
 
-  it("常設スポットには開催日を設定できない", async () => {
-    const headers = await parentLogin();
-    const res = await sendJson(
-      "PATCH",
-      "/api/admin/items/it-gym-spot",
-      { version: 1, occurrences: [{ start_date: "2026-11-01", end_date: "2026-11-01", precision: "date" }] },
-      headers,
-    );
-    expect(res.status).toBe(400);
-  });
-
-  it("URL とタイトルだけで手動追加でき、分からない項目は不明のまま（A11）", async () => {
+  it("URL・タイトル・場所だけで手動追加でき、分からない項目は不明のまま（A11）", async () => {
     const headers = await parentLogin();
     const res = await sendJson(
       "POST",
       "/api/admin/items",
-      { kind: "event", title: "親が見つけたワークショップ", official_url: "https://example.com/ws" },
+      { title: "親が見つけた工房", official_url: "https://example.com/ws", new_place_name: "親が見つけた工房" },
       headers,
     );
     expect(res.status).toBe(201);
@@ -223,49 +159,28 @@ describe("候補の編集", () => {
     const detail: ItemDetailResponse = await (await get(`/api/items/${id}`)).json();
     expect(detail).toMatchObject({
       rain_policy: "unknown",
-      place: null,
       cover: null,
-      schedule: { state: "unknown" },
       eligibility: { age_min_kind: "unknown", guardian_rule: "unknown" },
       reservation_requirement: "unknown",
       price_status: "unknown",
     });
-    // 保存もできる
-    expect((await sendJson("PUT", `/api/profiles/pr-sora/favorites/${id}`, undefined)).status).toBe(204);
+    expect((await sendJson("PUT", `/api/bookmarks/${id}`, undefined)).status).toBe(204);
   });
 
-  it("既存の会場に別のイベントを追加しても、会場や以前のお気に入りは変わらない（A15）", async () => {
+  it("場所なし・場所の二重指定の手動追加は拒否", async () => {
     const headers = await parentLogin();
-    const placeBefore = await (await get("/api/admin/places/pl-sample-science", { headers })).json();
-    const res = await sendJson(
-      "POST",
-      "/api/admin/items",
-      { kind: "event", title: "新しい実験教室", place_id: "pl-sample-science" },
-      headers,
-    );
-    expect(res.status).toBe(201);
-    const placeAfter = await (await get("/api/admin/places/pl-sample-science", { headers })).json();
-    expect(placeAfter).toEqual(placeBefore);
-    const { results } = await env.DB.prepare("SELECT profile_id, item_id FROM favorites ORDER BY item_id").all();
-    expect(results).toEqual([
-      { profile_id: "pr-umi", item_id: "it-park-spot" },
-      { profile_id: "pr-sora", item_id: "it-science-slime" },
-    ]);
+    expect((await sendJson("POST", "/api/admin/items", { title: "x" }, headers)).status).toBe(400);
+    expect(
+      (await sendJson("POST", "/api/admin/items", { title: "x", place_id: "pl-sample-park", new_place_name: "y" }, headers)).status,
+    ).toBe(400);
   });
 });
 
 describe("場所と移動の編集", () => {
   it("座標を消すと精度も不明に戻す。緯度だけの変更は拒否", async () => {
     const headers = await parentLogin();
-    expect(
-      (await sendJson("PATCH", "/api/admin/places/pl-sample-park", { version: 1, latitude: 35 }, headers)).status,
-    ).toBe(400);
-    const res = await sendJson(
-      "PATCH",
-      "/api/admin/places/pl-sample-park",
-      { version: 1, latitude: null, longitude: null },
-      headers,
-    );
+    expect((await sendJson("PATCH", "/api/admin/places/pl-sample-park", { version: 1, latitude: 35 }, headers)).status).toBe(400);
+    const res = await sendJson("PATCH", "/api/admin/places/pl-sample-park", { version: 1, latitude: null, longitude: null }, headers);
     expect(res.status).toBe(200);
     const body: AdminPlaceResponse = await (await get("/api/admin/places/pl-sample-park", { headers })).json();
     expect(body.place).toMatchObject({ latitude: null, position_accuracy: "unknown", version: 2 });

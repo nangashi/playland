@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
-import { ENTRANCES, TAGS } from "../../src/domain/tags";
+import { CATEGORIES, TAGS } from "../../src/domain/tags";
 import { applyBundle, previewBundle } from "../../src/ingest/apply";
 import { validateBundle, type BundleValidation } from "../../src/ingest/bundle";
 import { loadKnown } from "../../src/ingest/known";
@@ -177,7 +177,7 @@ async function exportKnown(db: D1Database): Promise<number> {
 
 function printTags(): number {
   if (values.json) {
-    console.log(JSON.stringify({ tags: TAGS, entrances: ENTRANCES }, null, 2));
+    console.log(JSON.stringify({ tags: TAGS, categories: CATEGORIES }, null, 2));
     return 0;
   }
   for (const category of ["facility", "experience"] as const) {

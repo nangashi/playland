@@ -15,7 +15,6 @@ import type {
   ItemDetailResponse,
   ItemListResponse,
   MapItemsResponse,
-  ProfileListResponse,
   PublicSettingsResponse,
 } from "../domain/api";
 
@@ -50,10 +49,6 @@ function json(method: string, body: unknown): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
-export function fetchProfiles(signal?: AbortSignal) {
-  return request<ProfileListResponse>("/api/profiles", { signal });
-}
-
 export function fetchSettings(signal?: AbortSignal) {
   return request<PublicSettingsResponse>("/api/settings", { signal });
 }
@@ -71,11 +66,9 @@ export function fetchItem(id: string, signal?: AbortSignal) {
   return request<ItemDetailResponse>(`/api/items/${encodeURIComponent(id)}`, { signal });
 }
 
-export function setFavorite(profileId: string, itemId: string, saved: boolean) {
-  return request<void>(
-    `/api/profiles/${encodeURIComponent(profileId)}/favorites/${encodeURIComponent(itemId)}`,
-    { method: saved ? "PUT" : "DELETE" },
-  );
+/** 家族で共有する保存 */
+export function setBookmark(itemId: string, saved: boolean) {
+  return request<void>(`/api/bookmarks/${encodeURIComponent(itemId)}`, { method: saved ? "PUT" : "DELETE" });
 }
 
 // ---- 親 ----

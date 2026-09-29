@@ -1,16 +1,14 @@
 import { z } from "zod";
-import { httpUrlSchema, occurrenceInputSchema } from "../domain/admin";
+import { httpUrlSchema } from "../domain/admin";
 import {
   ageBoundKinds,
   guardianRules,
   idSchema,
-  itemKinds,
   mediaKinds,
   positionAccuracies,
   priceStatuses,
   rainPolicies,
   reservationRequirements,
-  scheduleStatuses,
   siblingRules,
   tagAssessments,
 } from "../domain/model";
@@ -22,6 +20,8 @@ import { isKnownTagId } from "../domain/tags";
  */
 
 const isoDateTime = z.iso.datetime({ offset: true });
+/** 今は常設スポットだけを受け付ける（イベントは次のフェーズ） */
+const spotKind = z.literal("spot", { error: "イベント（開催日のある候補）は次のフェーズで対応します。常設スポットだけを出してください" });
 const shortText = (max: number) => z.string().trim().min(1).max(max);
 const nullableText = (max: number) => z.string().trim().max(max).nullable().default(null);
 const age = z.number().int().min(0).max(120).nullable().default(null);
@@ -56,7 +56,7 @@ const placeSchema = z
 
 const itemSchema = z
   .object({
-    kind: z.enum(itemKinds),
+    kind: spotKind,
     title: shortText(200),
     child_description: z.string().trim().max(120).nullable().default(null),
     official_url: httpUrlSchema.nullable().default(null),
@@ -64,8 +64,6 @@ const itemSchema = z
     facility_tags_status: z.enum(tagAssessments).default("unassessed"),
     experience_tags_status: z.enum(tagAssessments).default("unassessed"),
     rain_policy: z.enum(rainPolicies).default("unknown"),
-    schedule_status: z.enum(scheduleStatuses).default("unknown"),
-    occurrences: z.array(occurrenceInputSchema).max(200).default([]),
     age_min_kind: z.enum(ageBoundKinds).default("unknown"),
     age_min: age,
     age_max_kind: z.enum(ageBoundKinds).default("unknown"),
@@ -84,7 +82,7 @@ const itemSchema = z
 
 const evidenceSchema = z
   .object({
-    /** 根拠を示す項目（item.rain_policy / item.occurrences / item.age / item.eligibility / item.reservation / item.price など） */
+    /** 根拠を示す項目（item.rain_policy / item.age / item.eligibility / item.reservation / item.price など） */
     field: shortText(100),
     /** 元ページの短い引用。全文転載しない */
     text: shortText(MAX_EVIDENCE_TEXT),
@@ -105,8 +103,7 @@ const imageCandidateSchema = z
 export const candidateSchema = z
   .object({
     source: sourceSchema,
-    /** 会場が分からない場合は null（イベントのみ） */
-    place: placeSchema.nullable(),
+    place: placeSchema,
     item: itemSchema,
     evidence: z.array(evidenceSchema).max(30).default([]),
     image_candidates: z.array(imageCandidateSchema).max(10).default([]),
@@ -143,7 +140,6 @@ export type BundleValidation =
 /** 判定を「不明」以外にするときに必要な根拠の項目 */
 const EVIDENCE_RULES: { field: string; needed: (c: Candidate) => boolean; label: string }[] = [
   { field: "item.rain_policy", needed: (c) => c.item.rain_policy !== "unknown", label: "雨天対応" },
-  { field: "item.occurrences", needed: (c) => c.item.schedule_status === "known", label: "開催日" },
   {
     field: "item.age",
     needed: (c) => c.item.age_min_kind !== "unknown" || c.item.age_max_kind !== "unknown",
@@ -186,32 +182,17 @@ export function validateBundle(input: unknown): BundleValidation {
       if (!isKnownTagId(tag)) errors.push(`未定義のタグ「${tag}」は tag_ids ではなく suggested_tags に入れてください`);
     }
 
-    if (item.kind === "spot" && place === null) errors.push("常設スポットには場所が必要です");
-    if (place) {
-      if ((place.existing_place_id === null) === (place.name === null)) {
-        errors.push("場所は existing_place_id か name のどちらか一方を指定してください");
-      }
-      const hasCoords = place.latitude !== null || place.longitude !== null;
-      if ((place.latitude === null) !== (place.longitude === null)) errors.push("緯度と経度は両方指定してください");
-      if (hasCoords && place.position_source === null) {
-        errors.push("座標には出どころ（position_source）が必要です。推測した座標は入れないでください");
-      }
-      if (!hasCoords && place.position_accuracy !== "unknown") errors.push("座標がないのに位置の精度が指定されています");
-      if (place.existing_place_id && (hasCoords || place.address_text || place.google_maps_url)) {
-        warnings.push("既存の場所の住所・座標は取り込みでは変更しません（親の編集で行います）");
-      }
+    if ((place.existing_place_id === null) === (place.name === null)) {
+      errors.push("場所は existing_place_id か name のどちらか一方を指定してください");
     }
-
-    if (item.kind === "spot" && (item.occurrences.length > 0 || item.schedule_status === "known")) {
-      errors.push("常設スポットに開催日は設定できません");
+    const hasCoords = place.latitude !== null || place.longitude !== null;
+    if ((place.latitude === null) !== (place.longitude === null)) errors.push("緯度と経度は両方指定してください");
+    if (hasCoords && place.position_source === null) {
+      errors.push("座標には出どころ（position_source）が必要です。推測した座標は入れないでください");
     }
-    if (item.kind === "event") {
-      if (item.schedule_status === "known" && item.occurrences.length === 0) {
-        errors.push("schedule_status=known なのに開催日がありません");
-      }
-      if (item.schedule_status === "unknown" && item.occurrences.length > 0) {
-        errors.push("開催日があるのに schedule_status=unknown です");
-      }
+    if (!hasCoords && place.position_accuracy !== "unknown") errors.push("座標がないのに位置の精度が指定されています");
+    if (place.existing_place_id && (hasCoords || place.address_text || place.google_maps_url)) {
+      warnings.push("既存の場所の住所・座標は取り込みでは変更しません（親の編集で行います）");
     }
 
     if ((item.age_min_kind === "value") !== (item.age_min !== null)) errors.push("age_min_kind と age_min が一致しません");

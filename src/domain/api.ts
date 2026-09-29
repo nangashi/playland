@@ -1,10 +1,8 @@
 import type {
   FamilySettingsRecord,
-  ItemKind,
   ItemRecord,
   MediaKind,
   MediaRecord,
-  OccurrenceRecord,
   PlaceRecord,
   PositionAccuracy,
   RainPolicy,
@@ -12,7 +10,6 @@ import type {
   TransportPreferenceRecord,
   TravelEstimateRecord,
 } from "./model";
-import type { ScheduleSummary } from "./schedule";
 import type { UnknownReason } from "./search";
 import type { ModeView } from "./transport";
 
@@ -30,22 +27,25 @@ export interface MediaRef {
 
 export interface ItemCard {
   id: string;
-  kind: ItemKind;
   title: string;
+  /** 紹介文 */
   child_description: string | null;
   rain_policy: RainPolicy;
   place: PlaceSummary | null;
-  schedule: ScheduleSummary;
   tag_ids: string[];
-  /** この候補を「行きたい」に入れている家族内プロフィール */
-  saved_by_profile_ids: string[];
+  /** 家族で保存済み */
+  saved: boolean;
   /** 不明のまま含めた条件 */
   unknown: UnknownReason[];
-  finished: boolean;
-  /** 会場不明なら null */
+  /** 場所不明なら null */
   travel: ModeView[] | null;
   matched_modes: TransportMode[] | null;
   cover: MediaRef | null;
+  /** カードに出す参加条件の要約 */
+  age_min_kind: ItemRecord["age_min_kind"];
+  age_min: number | null;
+  reservation_requirement: ItemRecord["reservation_requirement"];
+  price_status: ItemRecord["price_status"];
 }
 
 export interface ItemListResponse {
@@ -55,7 +55,7 @@ export interface ItemListResponse {
   offset: number;
 }
 
-/** 地図の 1 つの会場。同じ会場の候補（常設・イベント）をまとめる */
+/** 地図の 1 つの場所。同じ場所の候補をまとめる */
 export interface MapVenue {
   place: {
     id: string;
@@ -71,9 +71,9 @@ export interface MapItemsResponse {
   venues: MapVenue[];
   /** 条件に合う候補の総数（地図に出せないものを含む） */
   total: number;
-  /** 会場不明・座標なしで地図に出せない候補の数 */
+  /** 場所不明・座標なしで地図に出せない候補の数 */
   unpositioned: number;
-  /** 上限を超えて出さなかった会場の数 */
+  /** 上限を超えて出さなかった場所の数 */
   omitted_venues: number;
   max_markers: number;
 }
@@ -91,12 +91,9 @@ export interface MediaInfo extends MediaRef {
   source_url: string | null;
 }
 
-export type OccurrenceView = Omit<OccurrenceRecord, "item_id">;
-
 export interface ItemDetailResponse extends Omit<ItemCard, "place"> {
   official_url: string | null;
   place: PlaceDetail | null;
-  occurrences: OccurrenceView[];
   eligibility: Pick<
     ItemRecord,
     | "age_min_kind"
@@ -109,23 +106,11 @@ export interface ItemDetailResponse extends Omit<ItemCard, "place"> {
   >;
   recommended_age_min: number | null;
   recommended_age_max: number | null;
-  reservation_requirement: ItemRecord["reservation_requirement"];
   reservation_note: string | null;
-  price_status: ItemRecord["price_status"];
   price_text: string | null;
   media: MediaInfo[];
   initialized_at: string | null;
   parent_reviewed_at: string | null;
-}
-
-export interface ProfileResponse {
-  id: string;
-  display_name: string;
-  age_hint: number | null;
-}
-
-export interface ProfileListResponse {
-  profiles: ProfileResponse[];
 }
 
 /** 一般の画面向けの設定。自宅の座標は含めない */
@@ -150,7 +135,6 @@ export interface AdminSessionResponse {
 export interface AdminItemResponse {
   item: ItemRecord;
   tag_ids: string[];
-  occurrences: OccurrenceView[];
   place: PlaceRecord | null;
   media: MediaRecord[];
 }

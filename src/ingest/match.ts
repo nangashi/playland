@@ -61,7 +61,7 @@ export function matchCandidates(candidates: readonly Candidate[], known: KnownDa
     }
 
     let place: PlaceResolution = { kind: "none" };
-    if (c.place?.existing_place_id) {
+    if (c.place.existing_place_id) {
       if (!placeIds.has(c.place.existing_place_id)) {
         return {
           index,
@@ -73,7 +73,7 @@ export function matchCandidates(candidates: readonly Candidate[], known: KnownDa
         };
       }
       place = { kind: "existing", id: c.place.existing_place_id };
-    } else if (c.place?.name) {
+    } else if (c.place.name) {
       place = { kind: "new", name: c.place.name };
       const same = placesByName.get(normalizeName(c.place.name));
       if (same) reasons.push(`既存の場所と同じ名前です（${same.join(", ")}）。同じ場所なら existing_place_id を指定してください`);
@@ -82,11 +82,7 @@ export function matchCandidates(candidates: readonly Candidate[], known: KnownDa
     const sameTitle = itemsByTitle.get(normalizeName(title)) ?? [];
     for (const other of sameTitle) {
       const samePlace = place.kind === "existing" && other.place_id === place.id;
-      const firstDate = c.item.occurrences.map((o) => o.start_date).sort()[0] ?? null;
-      const sameDate = firstDate !== null && other.first_date === firstDate;
-      reasons.push(
-        `同じ名前の候補があります（${other.id}${samePlace ? "・同じ場所" : ""}${sameDate ? "・同じ開始日" : ""}）。重複か確認してください`,
-      );
+      reasons.push(`同じ名前の候補があります（${other.id}${samePlace ? "・同じ場所" : ""}）。重複か確認してください`);
     }
     for (const note of c.needs_review) reasons.push(`要確認: ${note}`);
 

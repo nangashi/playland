@@ -15,12 +15,11 @@ export async function seed() {
     "place_transport_preferences",
     "event_occurrences",
     "item_tags",
-    "favorites",
+    "bookmarks",
     "items",
-    "profiles",
     "places",
   ].map((t) => `DELETE FROM ${t}`);
-  const resetSettings = `UPDATE family_settings SET origin_label = 'じたく', origin_latitude = NULL,
+  const resetSettings = `UPDATE family_settings SET origin_label = '自宅', origin_latitude = NULL,
     origin_longitude = NULL, origin_version = 1, bicycle_max_minutes = 20, version = 1`;
   await env.DB.batch([...clear, resetSettings, ...splitStatements(sql)].map((s) => env.DB.prepare(s)));
 }

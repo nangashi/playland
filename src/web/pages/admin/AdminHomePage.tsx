@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
-import type { ItemKind } from "../../../domain/model";
 import { createItem, endAdminSession, fetchAdminPlaces } from "../../api";
 import { AdminFrame, requireParentSession, SaveMessage, useSave } from "./common";
 
@@ -14,10 +13,9 @@ export function AdminHomePage() {
   const { session, places } = useLoaderData<typeof adminHomeLoader>();
   const navigate = useNavigate();
   const { status, run } = useSave();
-  const [kind, setKind] = useState<ItemKind>("event");
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [placeMode, setPlaceMode] = useState<"none" | "existing" | "new">("none");
+  const [placeMode, setPlaceMode] = useState<"existing" | "new">("new");
   const [placeId, setPlaceId] = useState(places[0]?.id ?? "");
   const [newPlaceName, setNewPlaceName] = useState("");
 
@@ -26,7 +24,6 @@ export function AdminHomePage() {
     let created: { id: string } | null = null;
     const ok = await run(async () => {
       created = await createItem({
-        kind,
         title,
         official_url: url || null,
         ...(placeMode === "existing" ? { place_id: placeId } : {}),
@@ -58,18 +55,12 @@ export function AdminHomePage() {
       <section className="section">
         <h2 className="section-title">候補を手動で追加</h2>
         <p className="muted">
-          URL とタイトルだけで追加できます。分からない項目は「未確認」のまま登録され、あとから編集できます。
+          名前・URL・場所だけで追加できます。分からない項目は「未確認」のまま登録され、あとから編集できます。
+          （イベントは次のフェーズで対応します）
         </p>
         <form className="form" onSubmit={submit}>
           <label>
-            種類
-            <select value={kind} onChange={(e) => setKind(e.target.value as ItemKind)}>
-              <option value="event">イベント（開催日がある）</option>
-              <option value="spot">常設スポット（施設そのもの）</option>
-            </select>
-          </label>
-          <label>
-            正式名称
+            名前
             <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
           </label>
           <label>
@@ -78,12 +69,6 @@ export function AdminHomePage() {
           </label>
           <fieldset>
             <legend>場所</legend>
-            {kind === "event" && (
-              <label className="check">
-                <input type="radio" checked={placeMode === "none"} onChange={() => setPlaceMode("none")} />
-                会場は未確認
-              </label>
-            )}
             <label className="check">
               <input type="radio" checked={placeMode === "existing"} onChange={() => setPlaceMode("existing")} />
               登録済みの場所
@@ -108,7 +93,7 @@ export function AdminHomePage() {
           <button
             type="submit"
             className="link-button"
-            disabled={status.kind === "saving" || (kind === "spot" && placeMode === "none")}
+            disabled={status.kind === "saving"}
           >
             追加して編集へ
           </button>

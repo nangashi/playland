@@ -13,17 +13,17 @@ export function ErrorPage({ notFound = false }: { notFound?: boolean }) {
 
   const message =
     status === 404
-      ? "みつからなかったよ"
+      ? "ページが見つかりません。"
       : status === 401 || status === 403
-        ? "ログインが ひつようです。おうちのひとに きいてね"
-        : "うまく よみこめなかったよ。すこし まってから もういちど ためしてね";
+        ? "ログインが必要です。"
+        : "読み込めませんでした。時間をおいてもう一度お試しください。";
 
   return (
     <main className="page">
       <p className="empty">{message}</p>
-      <Link to="/search" className="secondary-button">
-        さがす がめんへ
-      </Link>
+      <p className="empty">
+        <Link to="/search">一覧へ</Link>
+      </p>
     </main>
   );
 }

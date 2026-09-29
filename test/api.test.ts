@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ItemDetailResponse, ItemListResponse, ProfileListResponse } from "../src/domain/api";
+import type { ItemDetailResponse, ItemListResponse } from "../src/domain/api";
 import { get, seed, send } from "./helpers";
 
 beforeEach(seed);
@@ -12,55 +12,58 @@ async function list(query = ""): Promise<ItemListResponse> {
 }
 
 describe("GET /api/items", () => {
-  it("公開中の候補を返し、下書き・非表示は含めない", async () => {
+  it("公開中の常設スポットを返し、下書き・非表示・イベントは含めない", async () => {
+    const now = "2026-09-20T00:00:00.000Z";
+    await env.DB.prepare(
+      `INSERT INTO items (id, kind, place_id, title, publish_status, created_at, updated_at)
+       VALUES ('it-event', 'event', 'pl-sample-science', 'イベント', 'published', ?, ?)`,
+    )
+      .bind(now, now)
+      .run();
     const body = await list();
     const ids = body.items.map((i) => i.id);
     expect(ids).not.toContain("it-draft");
     expect(ids).not.toContain("it-hidden");
-    // 終了済みイベント（9/20）は通常の発見一覧から外れる
-    expect(ids).not.toContain("it-science-star");
-    expect(body.total).toBe(6);
-    const withEnded = await list("?include_ended=true");
-    expect(withEnded.total).toBe(7);
-    expect(withEnded.items.at(-1)).toMatchObject({ id: "it-science-star", finished: true });
+    expect(ids).not.toContain("it-event");
+    expect(body.total).toBe(7);
+    expect((await get("/api/items/it-event")).status).toBe(404);
   });
 
-  it("写真・座標・会場がなくても一覧に載る（A11）", async () => {
-    const body = await list();
-    const wood = body.items.find((i) => i.id === "it-wood-event");
-    expect(wood).toMatchObject({ place: null, child_description: null, rain_policy: "unknown" });
-    const gym = body.items.find((i) => i.id === "it-gym-spot");
-    expect(gym?.place?.name).toBe("サンプルクライミングジム");
+  it("写真・座標・説明がなくても一覧に載る（A11）", async () => {
+    const farm = (await list()).items.find((i) => i.id === "it-farm-spot");
+    expect(farm).toMatchObject({ child_description: null, cover: null, place: { name: "サンプルふれあい牧場" } });
   });
 
   it("不明な雨天対応を ok などに変換しない", async () => {
-    const body = await list();
-    expect(body.items.find((i) => i.id === "it-gym-spot")?.rain_policy).toBe("unknown");
+    expect((await list()).items.find((i) => i.id === "it-gym-spot")?.rain_policy).toBe("unknown");
   });
 
   it("同じ API で保存済みに絞れる（A03）", async () => {
-    const mine = await list("?favorites=mine&profile_id=pr-sora");
-    expect(mine.items.map((i) => i.id)).toEqual(["it-science-slime"]);
-    const family = await list("?favorites=family");
-    expect(family.items.map((i) => i.id).sort()).toEqual(["it-park-spot", "it-science-slime"]);
+    const saved = await list("?saved=true");
+    expect(saved.items.map((i) => i.id).sort()).toEqual(["it-park-spot", "it-science-spot"]);
+    expect(saved.items.every((i) => i.saved)).toBe(true);
+  });
+
+  it("カテゴリと雨の日の条件で絞れる", async () => {
+    const r = await list("?category=make&rain=ok");
+    expect(r.items.map((i) => i.id).sort()).toEqual(["it-kids-spot", "it-woodshop-spot"]);
   });
 
   it("不正な条件は 400", async () => {
-    expect((await get("/api/items?favorites=mine")).status).toBe(400);
+    expect((await get("/api/items?category=nope")).status).toBe(400);
   });
 
   it("家族のデータを共有キャッシュに載せない", async () => {
-    const res = await get("/api/items");
-    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect((await get("/api/items")).headers.get("Cache-Control")).toBe("private, no-store");
   });
 });
 
 describe("GET /api/items/:id", () => {
-  it("会場と保存状態を含む詳細を返す", async () => {
-    const res = await get("/api/items/it-science-slime");
-    const body: ItemDetailResponse = await res.json();
-    expect(body.place).toMatchObject({ id: "pl-sample-science", position_accuracy: "exact" });
-    expect(body.saved_by_profile_ids).toEqual(["pr-sora"]);
+  it("場所・参加条件・保存状態を含む詳細を返す", async () => {
+    const body: ItemDetailResponse = await (await get("/api/items/it-woodshop-spot")).json();
+    expect(body.place).toMatchObject({ id: "pl-sample-woodshop", position_accuracy: "exact" });
+    expect(body.eligibility).toMatchObject({ age_min_kind: "value", age_min: 6, guardian_rule: "required" });
+    expect(body).toMatchObject({ reservation_requirement: "required", saved: false });
   });
 
   it("下書きや存在しない候補は 404", async () => {
@@ -69,42 +72,31 @@ describe("GET /api/items/:id", () => {
   });
 });
 
-describe("GET /api/profiles", () => {
-  it("有効なプロフィールを並び順で返す", async () => {
-    const body: ProfileListResponse = await (await get("/api/profiles")).json();
-    expect(body.profiles.map((p) => p.id)).toEqual(["pr-sora", "pr-umi", "pr-parent"]);
-  });
-});
-
-describe("お気に入り", () => {
-  const path = "/api/profiles/pr-umi/favorites/it-gym-spot";
+describe("家族の保存", () => {
+  const path = "/api/bookmarks/it-gym-spot";
 
   it("PUT を繰り返しても 1 件だけ（冪等）", async () => {
     expect((await send("PUT", path)).status).toBe(204);
     expect((await send("PUT", path)).status).toBe(204);
-    const { results } = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM favorites WHERE profile_id = 'pr-umi' AND item_id = 'it-gym-spot'",
-    ).all<{ n: number }>();
-    expect(results[0]?.n).toBe(1);
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM bookmarks WHERE item_id = 'it-gym-spot'").first<{ n: number }>();
+    expect(row?.n).toBe(1);
   });
 
   it("保存したものは D1 から別のリクエストで参照できる（A02）", async () => {
     await send("PUT", path);
-    const mine = await list("?favorites=mine&profile_id=pr-umi");
-    expect(mine.items.map((i) => i.id).sort()).toEqual(["it-gym-spot", "it-park-spot"]);
+    const saved = await list("?saved=true");
+    expect(saved.items.map((i) => i.id)).toContain("it-gym-spot");
   });
 
   it("DELETE は存在しなくても成功", async () => {
     expect((await send("DELETE", path)).status).toBe(204);
     await send("PUT", path);
     expect((await send("DELETE", path)).status).toBe(204);
-    const mine = await list("?favorites=mine&profile_id=pr-umi");
-    expect(mine.items.map((i) => i.id)).toEqual(["it-park-spot"]);
+    expect((await list("?saved=true")).items.map((i) => i.id)).not.toContain("it-gym-spot");
   });
 
-  it("存在しないプロフィール・非公開の候補には保存できない", async () => {
-    expect((await send("PUT", "/api/profiles/pr-nobody/favorites/it-gym-spot")).status).toBe(404);
-    expect((await send("PUT", "/api/profiles/pr-umi/favorites/it-draft")).status).toBe(404);
+  it("非公開の候補には保存できない", async () => {
+    expect((await send("PUT", "/api/bookmarks/it-draft")).status).toBe(404);
   });
 
   it("別オリジンや Origin なしの書き込みは拒否（CSRF）", async () => {
@@ -112,9 +104,9 @@ describe("お気に入り", () => {
     expect((await send("PUT", path, {})).status).toBe(403);
   });
 
-  it("候補の内容を変えても、お気に入りは参照なので同じ候補として表示される", async () => {
-    await env.DB.prepare("UPDATE items SET title = '新しい名前' WHERE id = 'it-science-slime'").run();
-    const mine = await list("?favorites=mine&profile_id=pr-sora");
-    expect(mine.items[0]).toMatchObject({ id: "it-science-slime", title: "新しい名前" });
+  it("候補の内容を変えても、保存は参照なので同じ候補として表示される", async () => {
+    await env.DB.prepare("UPDATE items SET title = '新しい名前' WHERE id = 'it-science-spot'").run();
+    const saved = await list("?saved=true");
+    expect(saved.items.find((i) => i.id === "it-science-spot")?.title).toBe("新しい名前");
   });
 });

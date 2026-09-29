@@ -6,41 +6,37 @@
     {
       "source": {
         "source_id": "sample-science",
-        "url": "https://example.com/science/events",
-        "source_key": "robot-class-2026-10",
+        "url": "https://example.com/science/planetarium",
+        "source_key": "planetarium",
         "fetched_at": "2026-09-29T00:00:00Z"
       },
-      "place": { "existing_place_id": "pl-sample-science", "name": null },
+      "place": { "existing_place_id": null, "name": "サンプル市こどもプラネタリウム", "address_text": "サンプル市ほしの町4-1" },
       "item": {
-        "kind": "event",
-        "title": "はじめてのロボット教室",
-        "child_description": "ロボットを うごかす プログラムを つくろう。",
-        "tag_ids": ["experiment", "crafting", "science_museum"],
+        "kind": "spot",
+        "title": "サンプル市こどもプラネタリウム",
+        "child_description": "季節の星座を解説付きで見られる小さなプラネタリウム。",
+        "tag_ids": ["science_museum", "stargazing"],
         "facility_tags_status": "assessed",
         "experience_tags_status": "assessed",
         "rain_policy": "ok",
-        "schedule_status": "known",
-        "occurrences": [
-          { "start_date": "2026-10-11", "end_date": "2026-10-11", "precision": "date" },
-          { "start_date": "2026-10-25", "end_date": "2026-10-25", "precision": "date" }
-        ],
-        "age_min_kind": "value",
-        "age_min": 7,
-        "age_max_kind": "unknown",
-        "eligibility_raw_text": "小学1年生以上"
+        "age_min_kind": "none",
+        "age_max_kind": "none",
+        "reservation_requirement": "not_required",
+        "price_status": "paid",
+        "price_text": "大人300円・中学生以下無料"
       },
       "evidence": [
-        { "field": "item.rain_policy", "text": "館内の実験室で行います。", "source_url": "https://example.com/science/events" },
-        { "field": "item.occurrences", "text": "10月11日（日）、10月25日（日）", "source_url": "https://example.com/science/events" },
-        { "field": "item.age", "text": "対象：小学1年生以上", "source_url": "https://example.com/science/events" }
+        { "field": "item.rain_policy", "text": "館内のドームで投影します。", "source_url": "https://example.com/science/planetarium" },
+        { "field": "item.age", "text": "どなたでもご覧いただけます。", "source_url": "https://example.com/science/planetarium" },
+        { "field": "item.reservation", "text": "予約は不要です。", "source_url": "https://example.com/science/planetarium" },
+        { "field": "item.price", "text": "観覧料 大人300円、中学生以下無料", "source_url": "https://example.com/science/planetarium" }
       ],
-      "needs_review": [],
-      "suggested_tags": ["programming"]
+      "suggested_tags": ["プログラミング"]
     },
     {
       "source": {
         "source_id": "sample-city",
-        "url": "https://example.com/city/parks/river",
+        "url": "https://example.com/city/parks",
         "source_key": "river-park",
         "fetched_at": "2026-09-29T00:00:00Z"
       },
@@ -48,61 +44,50 @@
       "item": {
         "kind": "spot",
         "title": "サンプル川の親水公園",
-        "child_description": "あさい かわで みずあそび できるよ。",
+        "child_description": "浅い川で水遊びができる公園。",
         "tag_ids": ["park", "water_play"],
         "facility_tags_status": "assessed",
         "experience_tags_status": "assessed",
         "rain_policy": "not_suitable"
       },
       "evidence": [
-        { "field": "item.rain_policy", "text": "増水時は水辺に立ち入れません。", "source_url": "https://example.com/city/parks/river" }
+        { "field": "item.rain_policy", "text": "増水時は水辺に立ち入れません。", "source_url": "https://example.com/city/parks" }
       ]
     },
     {
       "source": {
-        "source_id": "sample-library",
-        "url": "https://example.com/library/news",
-        "source_key": "ohanashikai-2026-10-17",
+        "source_id": "sample-city",
+        "url": "https://example.com/city/parks",
+        "source_key": "midorigaoka-park",
         "fetched_at": "2026-09-29T00:00:00Z"
       },
-      "place": null,
+      "place": { "existing_place_id": null, "name": "サンプルみどりが丘公園" },
       "item": {
-        "kind": "event",
-        "title": "えほんの おはなし会",
-        "tag_ids": ["reading"],
-        "experience_tags_status": "assessed",
-        "schedule_status": "known",
-        "occurrences": [
-          {
-            "start_date": "2026-10-17",
-            "end_date": "2026-10-17",
-            "precision": "datetime",
-            "starts_at": "2026-10-17T10:30:00+09:00",
-            "ends_at": "2026-10-17T11:00:00+09:00"
-          }
-        ]
+        "kind": "spot",
+        "title": "サンプルみどりが丘公園",
+        "child_description": "大型の複合遊具がある丘の上の公園。",
+        "tag_ids": ["park", "athletic"],
+        "facility_tags_status": "assessed",
+        "experience_tags_status": "assessed"
       },
-      "evidence": [
-        { "field": "item.occurrences", "text": "10月17日（土）10:30〜11:00", "source_url": "https://example.com/library/news" }
-      ],
-      "needs_review": []
+      "evidence": []
     },
     {
       "source": {
-        "source_id": "sample-library",
-        "url": "https://example.com/library/news",
-        "source_key": "origami-2026-10-24",
+        "source_id": "sample-city",
+        "url": "https://example.com/city/parks/forest-pond",
+        "source_key": "forest-pond",
         "fetched_at": "2026-09-29T00:00:00Z"
       },
-      "place": null,
+      "place": { "existing_place_id": "pl-sample-park", "name": null },
       "item": {
-        "kind": "event",
-        "title": "おりがみ ひろば",
-        "tag_ids": ["crafting"],
+        "kind": "spot",
+        "title": "サンプル森林公園 じゃぶじゃぶ池",
+        "child_description": "夏季だけ水が張られる浅い池。",
+        "tag_ids": ["water_play"],
         "experience_tags_status": "assessed"
       },
-      "evidence": [],
-      "needs_review": ["開催日の記載が見つからない"]
+      "needs_review": ["開放期間（夏季）の具体的な日付が書かれていない"]
     }
   ]
 }

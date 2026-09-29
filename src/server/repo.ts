@@ -1,12 +1,10 @@
 import type {
+  BookmarkRecord,
   FamilySettingsRecord,
-  FavoriteRecord,
   ItemRecord,
   ItemTagRecord,
   MediaRecord,
-  OccurrenceRecord,
   PlaceRecord,
-  ProfileRecord,
   TransportPreferenceRecord,
   TravelEstimateRecord,
 } from "../domain/model";
@@ -49,14 +47,6 @@ export async function listItemTags(db: D1Database, itemId?: string): Promise<Ite
     ? db.prepare(`SELECT item_id, tag_id FROM item_tags WHERE item_id = ?`).bind(itemId)
     : db.prepare(`SELECT item_id, tag_id FROM item_tags`);
   return (await stmt.all<ItemTagRecord>()).results;
-}
-
-export async function listOccurrences(db: D1Database, itemId?: string): Promise<OccurrenceRecord[]> {
-  const cols = `id, item_id, start_date, end_date, starts_at, ends_at, precision, status`;
-  const stmt = itemId
-    ? db.prepare(`SELECT ${cols} FROM event_occurrences WHERE item_id = ? ORDER BY start_date, starts_at, id`).bind(itemId)
-    : db.prepare(`SELECT ${cols} FROM event_occurrences`);
-  return (await stmt.all<OccurrenceRecord>()).results;
 }
 
 export async function getPlace(db: D1Database, id: string): Promise<PlaceRecord | null> {
@@ -131,55 +121,26 @@ export async function getActiveMedia(db: D1Database, id: string): Promise<MediaR
     .first<MediaRecord>();
 }
 
-// ---- お気に入り・プロフィール ----
+// ---- 家族の保存 ----
 
-const FAVORITE_SELECT = `SELECT f.profile_id, f.item_id, f.created_at
-  FROM favorites f JOIN profiles p ON p.id = f.profile_id AND p.active = 1`;
-
-/** 家族全体のお気に入り。家族規模の件数を前提に一括で読む */
-export async function listFavorites(db: D1Database): Promise<FavoriteRecord[]> {
-  const { results } = await db.prepare(FAVORITE_SELECT).all<FavoriteRecord>();
+export async function listBookmarks(db: D1Database): Promise<BookmarkRecord[]> {
+  const { results } = await db.prepare(`SELECT item_id, created_at FROM bookmarks`).all<BookmarkRecord>();
   return results;
 }
 
-export async function listFavoritesForItem(db: D1Database, itemId: string): Promise<FavoriteRecord[]> {
-  const { results } = await db
-    .prepare(`${FAVORITE_SELECT} WHERE f.item_id = ?`)
-    .bind(itemId)
-    .all<FavoriteRecord>();
-  return results;
-}
-
-export async function listActiveProfiles(db: D1Database): Promise<ProfileRecord[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT id, display_name, age_hint, sort_order FROM profiles
-        WHERE active = 1 ORDER BY sort_order, id`,
-    )
-    .all<ProfileRecord>();
-  return results;
-}
-
-export async function isActiveProfile(db: D1Database, id: string): Promise<boolean> {
-  const row = await db.prepare(`SELECT 1 AS ok FROM profiles WHERE id = ? AND active = 1`).bind(id).first();
-  return row !== null;
+export async function isBookmarked(db: D1Database, itemId: string): Promise<boolean> {
+  return (await db.prepare(`SELECT 1 AS ok FROM bookmarks WHERE item_id = ?`).bind(itemId).first()) !== null;
 }
 
 /** 何度呼んでも 1 件だけ残る（冪等） */
-export async function addFavorite(db: D1Database, profileId: string, itemId: string, now: string) {
+export async function addBookmark(db: D1Database, itemId: string, now: string) {
   await db
-    .prepare(
-      `INSERT INTO favorites (profile_id, item_id, created_at) VALUES (?, ?, ?)
-       ON CONFLICT (profile_id, item_id) DO NOTHING`,
-    )
-    .bind(profileId, itemId, now)
+    .prepare(`INSERT INTO bookmarks (item_id, created_at) VALUES (?, ?) ON CONFLICT (item_id) DO NOTHING`)
+    .bind(itemId, now)
     .run();
 }
 
 /** 存在しなくても成功扱い（冪等） */
-export async function removeFavorite(db: D1Database, profileId: string, itemId: string) {
-  await db
-    .prepare(`DELETE FROM favorites WHERE profile_id = ? AND item_id = ?`)
-    .bind(profileId, itemId)
-    .run();
+export async function removeBookmark(db: D1Database, itemId: string) {
+  await db.prepare(`DELETE FROM bookmarks WHERE item_id = ?`).bind(itemId).run();
 }

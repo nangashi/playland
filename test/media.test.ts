@@ -43,11 +43,11 @@ describe("写真", () => {
     expect(list.items.find((i) => i.id === "it-gym-spot")?.cover).toEqual({ id, kind: "venue" });
   });
 
-  it("会場の写真は、同じ会場のイベントのカードにも「会場の写真」として使う", async () => {
+  it("場所の写真は、候補自身の写真がなければカードに使う", async () => {
     const headers = await parentLogin();
     const res = await upload(headers, { place_id: "pl-sample-science", kind: "venue" });
     const { id } = (await res.json()) as { id: string };
-    const detail: ItemDetailResponse = await (await get("/api/items/it-science-slime")).json();
+    const detail: ItemDetailResponse = await (await get("/api/items/it-science-spot")).json();
     expect(detail.cover).toEqual({ id, kind: "venue" });
   });
 

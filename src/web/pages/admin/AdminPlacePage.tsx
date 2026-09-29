@@ -2,7 +2,7 @@ import { lazy, Suspense, useState, type FormEvent } from "react";
 import { useLoaderData, useRevalidator, type LoaderFunctionArgs } from "react-router";
 import type { PlacePatchInput, TransportPatchInput } from "../../../domain/admin";
 import type { AdminPlaceResponse } from "../../../domain/api";
-import { modeIcon, modeLabel } from "../../../domain/labels";
+import { modeLabel } from "../../../domain/labels";
 import {
   durationBases,
   modeVisibilities,
@@ -215,7 +215,7 @@ function TransportForm({ data, save, reload }: { data: AdminPlaceResponse; save:
           return (
             <div key={mode} className="mode-block">
               <h3>
-                <span aria-hidden>{modeIcon[mode]}</span> {modeLabel[mode]}
+                {modeLabel[mode]}
               </h3>
               <label>
                 表示

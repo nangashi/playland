@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLoaderData, useRevalidator, type LoaderFunctionArgs } from "react-router";
-import type { ItemPatchInput, OccurrenceInputValue } from "../../../domain/admin";
+import type { ItemPatchInput } from "../../../domain/admin";
 import type { AdminItemResponse } from "../../../domain/api";
 import { mediaKindLabel } from "../../../domain/labels";
 import {
@@ -11,7 +11,6 @@ import {
   publishStatuses,
   rainPolicies,
   reservationRequirements,
-  scheduleStatuses,
   siblingRules,
   tagAssessments,
   tagCategories,
@@ -35,7 +34,6 @@ const LABELS = {
   rain_policy: { ok: "雨でもできる根拠あり", conditional: "条件付き（小雨のみ・内容変更等）", not_suitable: "雨天中止・雨に不向き", unknown: "未確認" },
   publish_status: { published: "公開", draft: "下書き", hidden: "非表示" },
   tag_status: { assessed: "判定済み（該当なしを含む）", unassessed: "未判定" },
-  schedule_status: { known: "開催日が分かっている", unknown: "開催日は未確認" },
   age_kind: { value: "数値あり", none: "制限なしと明記", unknown: "記載なし・未確認" },
   guardian_rule: { required: "同伴が必要", not_required: "同伴不要", unknown: "未確認" },
   sibling_rule: { allowed: "同伴できる", not_allowed: "同伴できない", unknown: "未確認" },
@@ -43,47 +41,9 @@ const LABELS = {
   price: { free: "無料", paid: "有料", unknown: "未確認" },
 } as const;
 
-/** 画面の編集用の形。数値は文字列で持ち、保存時に null（未確認）へ変換する */
 interface FormState {
   item: ItemRecord;
   tagIds: string[];
-  occurrences: OccurrenceRow[];
-}
-
-interface OccurrenceRow {
-  start_date: string;
-  end_date: string;
-  /** datetime のときの日本時間の開始・終了（HH:MM） */
-  start_time: string;
-  end_time: string;
-  status: "scheduled" | "cancelled";
-}
-
-function toRows(data: AdminItemResponse): OccurrenceRow[] {
-  const hhmm = (iso: string | null) =>
-    iso
-      ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" }).format(new Date(iso))
-      : "";
-  return data.occurrences.map((o) => ({
-    start_date: o.start_date,
-    end_date: o.end_date,
-    start_time: hhmm(o.starts_at),
-    end_time: hhmm(o.ends_at),
-    status: o.status,
-  }));
-}
-
-function toOccurrenceInput(r: OccurrenceRow): OccurrenceInputValue {
-  const at = (date: string, time: string) => (time ? `${date}T${time}:00+09:00` : null);
-  const starts = at(r.start_date, r.start_time);
-  return {
-    start_date: r.start_date,
-    end_date: r.end_date || r.start_date,
-    precision: starts ? "datetime" : "date",
-    starts_at: starts,
-    ends_at: starts ? at(r.end_date || r.start_date, r.end_time) : null,
-    status: r.status,
-  };
 }
 
 const ITEM_FIELDS = [
@@ -95,7 +55,6 @@ const ITEM_FIELDS = [
   "place_id",
   "facility_tags_status",
   "experience_tags_status",
-  "schedule_status",
   "age_min_kind",
   "age_min",
   "age_max_kind",
@@ -139,7 +98,7 @@ function ItemForm({
   save: ReturnType<typeof useSave>;
   reload: () => void;
 }) {
-  const [form, setForm] = useState<FormState>({ item: data.item, tagIds: data.tag_ids, occurrences: toRows(data) });
+  const [form, setForm] = useState<FormState>({ item: data.item, tagIds: data.tag_ids });
   const { status, run } = save;
   const item = form.item;
   const set = <K extends keyof ItemRecord>(key: K, value: ItemRecord[K]) =>
@@ -154,8 +113,6 @@ function ItemForm({
     if (patch.age_min_kind !== undefined && form.item.age_min_kind !== "value") patch.age_min = null;
     if (patch.age_max_kind !== undefined && form.item.age_max_kind !== "value") patch.age_max = null;
     if (JSON.stringify([...form.tagIds].sort()) !== JSON.stringify(data.tag_ids)) patch.tag_ids = form.tagIds;
-    const occurrences = form.occurrences.filter((r) => r.start_date).map(toOccurrenceInput);
-    if (JSON.stringify(form.occurrences) !== JSON.stringify(toRows(data))) patch.occurrences = occurrences;
     return patch as ItemPatchInput;
   }
 
@@ -173,14 +130,10 @@ function ItemForm({
     }));
   }
 
-  function updateRow(index: number, next: Partial<OccurrenceRow>) {
-    setForm((f) => ({ ...f, occurrences: f.occurrences.map((r, i) => (i === index ? { ...r, ...next } : r)) }));
-  }
-
   return (
     <AdminFrame title="候補の編集">
       <p>
-        <Link to={`/items/${encodeURIComponent(data.item.id)}`}>子ども向けの表示を見る</Link>
+        <Link to={`/items/${encodeURIComponent(data.item.id)}`}>表示を確認</Link>
         {item.place_id && (
           <>
             {" ・ "}
@@ -197,11 +150,11 @@ function ItemForm({
         <fieldset>
           <legend>基本</legend>
           <label>
-            正式名称
+            名前
             <input value={item.title} onChange={(e) => set("title", e.target.value)} required maxLength={200} />
           </label>
           <label>
-            子ども向けの説明（ひらがな中心）
+            紹介文（一覧に出る短い説明）
             <textarea
               value={item.child_description ?? ""}
               onChange={(e) => set("child_description", e.target.value)}
@@ -227,9 +180,7 @@ function ItemForm({
             <select
               value={item.place_id ?? ""}
               onChange={(e) => set("place_id", e.target.value || null)}
-              disabled={item.kind === "spot" && places.length === 0}
             >
-              {item.kind === "event" && <option value="">会場は未確認</option>}
               {places.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -284,61 +235,6 @@ function ItemForm({
             );
           })}
         </fieldset>
-
-        {item.kind === "event" && (
-          <fieldset>
-            <legend>開催日</legend>
-            <select
-              value={item.schedule_status}
-              onChange={(e) => set("schedule_status", e.target.value as ItemRecord["schedule_status"])}
-            >
-              {scheduleStatuses.map((v) => (
-                <option key={v} value={v}>
-                  {LABELS.schedule_status[v]}
-                </option>
-              ))}
-            </select>
-            <p className="hint">離れた日程は 1 行ずつ登録します。時刻が分からなければ空欄のまま（日付だけの開催）にします。</p>
-            {form.occurrences.map((r, i) => (
-              <div key={i} className="occurrence-row">
-                <input type="date" value={r.start_date} onChange={(e) => updateRow(i, { start_date: e.target.value })} aria-label="開始日" />
-                <input type="time" value={r.start_time} onChange={(e) => updateRow(i, { start_time: e.target.value })} aria-label="開始時刻" />
-                <span>〜</span>
-                <input type="date" value={r.end_date} onChange={(e) => updateRow(i, { end_date: e.target.value })} aria-label="終了日" />
-                <input
-                  type="time"
-                  value={r.end_time}
-                  disabled={!r.start_time}
-                  onChange={(e) => updateRow(i, { end_time: e.target.value })}
-                  aria-label="終了時刻"
-                />
-                <select value={r.status} onChange={(e) => updateRow(i, { status: e.target.value as OccurrenceRow["status"] })}>
-                  <option value="scheduled">開催</option>
-                  <option value="cancelled">中止</option>
-                </select>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => setForm((f) => ({ ...f, occurrences: f.occurrences.filter((_, j) => j !== i) }))}
-                >
-                  削除
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                setForm((f) => ({
-                  ...f,
-                  occurrences: [...f.occurrences, { start_date: "", end_date: "", start_time: "", end_time: "", status: "scheduled" }],
-                }))
-              }
-            >
-              開催日を追加
-            </button>
-          </fieldset>
-        )}
 
         <fieldset>
           <legend>参加条件（主催者の記載）</legend>
@@ -492,7 +388,7 @@ function MediaSection({ data, reload }: { data: AdminItemResponse; reload: () =>
       <h2 className="section-title">写真</h2>
       <p className="hint">
         家族内だけで表示します。利用条件を確認できた写真だけを登録し、出典・撮影者を残してください。
-        「会場の写真」「過去の開催風景」「イメージ」を選び、実際の開催内容と区別します。
+        「施設の写真」「過去の様子」「イメージ」を選び、実際の様子と区別します。
       </p>
       <div className="gallery">
         {data.media.map((m) => (
