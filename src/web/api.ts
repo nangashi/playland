@@ -14,6 +14,7 @@ import type {
   ErrorResponse,
   ItemDetailResponse,
   ItemListResponse,
+  MapItemsResponse,
   ProfileListResponse,
   PublicSettingsResponse,
 } from "../domain/api";
@@ -60,6 +61,10 @@ export function fetchSettings(signal?: AbortSignal) {
 /** 検索条件は URL の query をそのまま API に渡す（一覧と地図で同じ条件を使う） */
 export function fetchItems(params: URLSearchParams, signal?: AbortSignal) {
   return request<ItemListResponse>(`/api/items?${params}`, { signal });
+}
+
+export function fetchMapItems(params: URLSearchParams, signal?: AbortSignal) {
+  return request<MapItemsResponse>(`/api/map-items?${params}`, { signal });
 }
 
 export function fetchItem(id: string, signal?: AbortSignal) {

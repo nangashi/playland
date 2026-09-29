@@ -10,7 +10,7 @@ async function call(url: string, overrides: Partial<Env>, init?: RequestInit) {
 }
 
 describe("家族限定の認証境界（A17）", () => {
-  const paths = ["/", "/search", "/api/items", "/api/profiles", "/media/x"];
+  const paths = ["/", "/search", "/api/items", "/api/map-items", "/api/profiles", "/media/x"];
 
   it("Access の JWT がなければ画面・API・写真のすべてを拒否", async () => {
     const accessEnv = { AUTH_MODE: "access", ACCESS_TEAM_DOMAIN: "family.cloudflareaccess.com", ACCESS_AUD: "aud" };

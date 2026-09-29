@@ -1013,3 +1013,205 @@ button.link-button {
   width: 100%;
   cursor: pointer;
 }
+
+/* ---- Phase 3: 地図 ---- */
+
+.result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.view-toggle button {
+  min-height: 40px;
+  min-width: 64px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.view-toggle button.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.map-wrap {
+  position: relative;
+}
+
+.map {
+  height: 62vh;
+  min-height: 320px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--ph-sky);
+  z-index: 0;
+}
+
+.map-small {
+  height: 280px;
+  min-height: 0;
+}
+
+.map-loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.map-notes {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.map-notes p {
+  margin: 2px 0;
+}
+
+/* 会場のマーカー（同じ会場の候補は数字でまとめる） */
+.venue-marker {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.venue-pin {
+  position: absolute;
+  left: 8px;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--accent);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+
+.venue-marker.is-approx .venue-pin {
+  background: var(--surface);
+  border: 3px dashed var(--accent);
+}
+
+.venue-marker.is-selected .venue-pin {
+  background: var(--event);
+  width: 28px;
+  height: 28px;
+  left: 6px;
+  top: 0;
+}
+
+.venue-count {
+  position: absolute;
+  right: -4px;
+  top: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.venue-star {
+  position: absolute;
+  left: -6px;
+  top: -8px;
+  color: var(--fav);
+  font-size: 18px;
+  text-shadow: 0 0 2px #000;
+}
+
+/* 別々の会場が近すぎるときのまとまり（会場マーカーと形を変える） */
+.cluster-marker {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px dashed var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  display: grid;
+  place-content: center;
+  text-align: center;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.cluster-marker span {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.cluster-marker small {
+  font-size: 10px;
+}
+
+.map-sheet {
+  position: relative;
+  margin-top: 12px;
+  padding: 12px 12px 4px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.map-sheet-close {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.map-sheet-title {
+  font-size: 17px;
+  margin: 4px 44px 4px 4px;
+}
+
+.map-sheet-cards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 85%);
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 0 12px;
+  scroll-snap-type: x mandatory;
+}
+
+.map-sheet-cards > .card {
+  scroll-snap-align: start;
+}
+
+.pin-picker {
+  display: grid;
+  gap: 4px;
+}
+
+.leaflet-container {
+  font: inherit;
+}

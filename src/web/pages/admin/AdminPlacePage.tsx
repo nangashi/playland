@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
 import { useLoaderData, useRevalidator, type LoaderFunctionArgs } from "react-router";
 import type { PlacePatchInput, TransportPatchInput } from "../../../domain/admin";
 import type { AdminPlaceResponse } from "../../../domain/api";
@@ -15,6 +15,8 @@ import {
 } from "../../../domain/model";
 import { fetchAdminPlace, patchPlace, patchTransport } from "../../api";
 import { AdminFrame, numberField, numberOrNull, requireParentSession, SaveMessage, useSave } from "./common";
+
+const PinPicker = lazy(() => import("../../map/PinPicker"));
 
 export async function adminPlaceLoader(args: LoaderFunctionArgs) {
   await requireParentSession(args);
@@ -72,6 +74,19 @@ function PlaceForm({ data, save, reload }: { data: AdminPlaceResponse; save: Ret
           <input value={place.address_text ?? ""} onChange={(e) => set("address_text", e.target.value)} />
         </label>
         <p className="hint">座標は、取得元が確かな値か、地図で確認した値だけを入れてください。推測で埋めません。</p>
+        <Suspense fallback={<div className="map map-small map-loading">地図を読み込んでいます…</div>}>
+          <PinPicker
+            latitude={numberOrNull(lat)}
+            longitude={numberOrNull(lng)}
+            fallbackCenter={data.origin}
+            onChange={(la, lo) => {
+              setLat(String(la));
+              setLng(String(lo));
+              // 地図で確認して置いた位置は「正確な地点」を初期値にする（親が変更できる）
+              set("position_accuracy", "exact");
+            }}
+          />
+        </Suspense>
         <div className="inline-fields">
           <label>
             緯度

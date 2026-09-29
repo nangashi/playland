@@ -55,6 +55,29 @@ export interface ItemListResponse {
   offset: number;
 }
 
+/** 地図の 1 つの会場。同じ会場の候補（常設・イベント）をまとめる */
+export interface MapVenue {
+  place: {
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    position_accuracy: PositionAccuracy;
+  };
+  items: ItemCard[];
+}
+
+export interface MapItemsResponse {
+  venues: MapVenue[];
+  /** 条件に合う候補の総数（地図に出せないものを含む） */
+  total: number;
+  /** 会場不明・座標なしで地図に出せない候補の数 */
+  unpositioned: number;
+  /** 上限を超えて出さなかった会場の数 */
+  omitted_venues: number;
+  max_markers: number;
+}
+
 export interface PlaceDetail extends PlaceSummary {
   address_text: string | null;
   latitude: number | null;
@@ -134,6 +157,8 @@ export interface AdminItemResponse {
 
 export interface AdminPlaceResponse {
   place: PlaceRecord;
+  /** ピン修正の初期表示用（親の画面だけ） */
+  origin: { latitude: number; longitude: number } | null;
   origin_version: number;
   preferences: TransportPreferenceRecord[];
   /** 現在の出発地点の版での値（手動・経路サービスとも） */

@@ -15,6 +15,7 @@ import { ENTRANCES } from "../domain/tags";
  * 入口（entrance）は画面の表現で、API には内部のタグ ID に展開して渡す。
  */
 export interface SearchState {
+  view: "list" | "map";
   purpose: Purpose;
   favorites: FavoritesFilter;
   entrances: string[];
@@ -41,6 +42,7 @@ export function readSearchState(params: URLSearchParams): SearchState {
   const max = Number.parseInt(params.get("max") ?? "", 10);
   const pages = Number.parseInt(params.get("pages") ?? "1", 10);
   return {
+    view: params.get("view") === "map" ? "map" : "list",
     purpose: oneOf(purposes, params.get("purpose"), "someday"),
     favorites: oneOf(favoritesFilters, params.get("favorites"), "all"),
     entrances: list("e").filter((id) => entranceIds.has(id)),
@@ -55,6 +57,7 @@ export function readSearchState(params: URLSearchParams): SearchState {
 
 export function writeSearchState(state: SearchState): URLSearchParams {
   const p = new URLSearchParams();
+  if (state.view === "map") p.set("view", "map");
   if (state.purpose !== "someday") p.set("purpose", state.purpose);
   if (state.favorites !== "all") p.set("favorites", state.favorites);
   if (state.entrances.length > 0) p.set("e", state.entrances.join(","));
@@ -63,7 +66,7 @@ export function writeSearchState(state: SearchState): URLSearchParams {
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max", String(state.maxMinutes));
   if (state.includeUnknown) p.set("unknown", "1");
-  if (state.pages > 1) p.set("pages", String(state.pages));
+  if (state.view === "list" && state.pages > 1) p.set("pages", String(state.pages));
   return p;
 }
 
@@ -88,6 +91,19 @@ export function toApiParams(
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max_minutes", String(state.maxMinutes));
   return p;
+}
+
+/** 地図用：一覧と同じ検索条件（ページ分割なし） */
+export function toMapApiParams(state: SearchState, profile: { id: string; age_hint: number | null }): URLSearchParams {
+  const p = toApiParams(state, profile, 0);
+  p.delete("limit");
+  p.delete("offset");
+  return p;
+}
+
+/** 地図の表示位置を覚えるキー（検索条件ごと。ページ数・表示形式は含めない） */
+export function mapViewKey(state: SearchState): string {
+  return writeSearchState({ ...state, view: "list", pages: 1 }).toString();
 }
 
 /** 結果ゼロのときに、どの条件を外せるかを示すための一覧 */

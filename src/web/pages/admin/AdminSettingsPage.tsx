@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
 import { useLoaderData, useRevalidator, type LoaderFunctionArgs } from "react-router";
 import type { SettingsPatchInput } from "../../../domain/admin";
 import type { AdminSettingsResponse } from "../../../domain/api";
 import { fetchAdminSettings, patchSettings } from "../../api";
 import { AdminFrame, numberField, numberOrNull, requireParentSession, SaveMessage, useSave } from "./common";
+
+const PinPicker = lazy(() => import("../../map/PinPicker"));
 
 export async function adminSettingsLoader(args: LoaderFunctionArgs) {
   await requireParentSession(args);
@@ -76,6 +78,17 @@ function SettingsForm({
             <input inputMode="decimal" value={lng} onChange={(e) => setLng(e.target.value)} />
           </label>
         </div>
+        <Suspense fallback={<div className="map map-small map-loading">地図を読み込んでいます…</div>}>
+          <PinPicker
+            latitude={numberOrNull(lat)}
+            longitude={numberOrNull(lng)}
+            fallbackCenter={null}
+            onChange={(la, lo) => {
+              setLat(String(la));
+              setLng(String(lo));
+            }}
+          />
+        </Suspense>
         <label className="check">
           <input type="checkbox" checked={bump} onChange={(e) => setBump(e.target.checked)} />
           座標は変えずに、出発地の前提を変える（古い所要時間を使わない）

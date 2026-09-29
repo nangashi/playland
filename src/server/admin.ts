@@ -225,6 +225,10 @@ adminApi.get("/places/:id", async (c) => {
   if (!place) return notFound(c);
   const body: AdminPlaceResponse = {
     place,
+    origin:
+      settings.origin_latitude !== null && settings.origin_longitude !== null
+        ? { latitude: settings.origin_latitude, longitude: settings.origin_longitude }
+        : null,
     origin_version: settings.origin_version,
     preferences,
     estimates: estimates.filter((e) => e.origin_version === settings.origin_version),

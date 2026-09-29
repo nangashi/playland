@@ -4,13 +4,21 @@ import type {
   ItemCard,
   ItemDetailResponse,
   ItemListResponse,
+  MapItemsResponse,
   MediaRef,
   ProfileListResponse,
   PublicSettingsResponse,
 } from "../domain/api";
 import { idSchema, type MediaRecord, type PlaceRecord } from "../domain/model";
 import { summarizeSchedule } from "../domain/schedule";
-import { parseSearchQuery, searchItems, type SearchData, type SearchEntry } from "../domain/search";
+import { buildVenueGroups, MAX_MAP_MARKERS } from "../domain/map";
+import {
+  parseSearchQuery,
+  searchAllEntries,
+  searchItems,
+  type SearchData,
+  type SearchEntry,
+} from "../domain/search";
 import { buildModeViews } from "../domain/transport";
 import * as repo from "./repo";
 import type { AppEnv } from "./types";
@@ -54,6 +62,42 @@ publicApi.get("/items", async (c) => {
     total: result.total,
     limit: query.limit,
     offset: query.offset,
+  };
+  return c.json(body);
+});
+
+/**
+ * 地図用。一覧と同じ検索条件・同じ検索関数を使い、ページ分割せずに会場ごとにまとめる
+ * （一覧の 1 ページ目だけを地図に出すことにならないように）。
+ */
+publicApi.get("/map-items", async (c) => {
+  const parsed = parseSearchQuery(new URL(c.req.url).searchParams);
+  if (!parsed.success) return c.json({ error: "invalid query" }, 400);
+  const db = c.env.DB;
+  const [data, places, media] = await Promise.all([
+    loadSearchData(db),
+    repo.listPlaces(db),
+    repo.listActiveMedia(db),
+  ]);
+  const entries = searchAllEntries(data, parsed.data, new Date());
+  const placeMap = new Map(places.map((p) => [p.id, p]));
+  const covers = coverIndex(media);
+  const groups = buildVenueGroups(entries, placeMap);
+  const body: MapItemsResponse = {
+    venues: groups.venues.map((g) => ({
+      place: {
+        id: g.place.id,
+        name: g.place.name,
+        latitude: g.place.latitude!,
+        longitude: g.place.longitude!,
+        position_accuracy: g.place.position_accuracy,
+      },
+      items: g.entries.map((e) => toCard(e, placeMap, covers)),
+    })),
+    total: entries.length,
+    unpositioned: groups.unpositioned,
+    omitted_venues: groups.omitted_venues,
+    max_markers: MAX_MAP_MARKERS,
   };
   return c.json(body);
 });

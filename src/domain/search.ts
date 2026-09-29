@@ -132,6 +132,15 @@ export interface SearchResult {
  * - 並び順は固定（一致 → 不明あり → 終了済み、各グループ内は新着順・ID 順）
  */
 export function searchItems(data: SearchData, query: SearchQuery, now: Date): SearchResult {
+  const entries = searchAllEntries(data, query, now);
+  return {
+    entries: entries.slice(query.offset, query.offset + query.limit),
+    total: entries.length,
+  };
+}
+
+/** ページ分割せずに、条件に合うすべての候補を並び順どおりに返す（地図用） */
+export function searchAllEntries(data: SearchData, query: SearchQuery, now: Date): SearchEntry[] {
   const savedBy = favoriteIndex(data.favorites);
   const tagsByItem = groupBy(data.itemTags, (t) => t.item_id);
   const occurrencesByItem = groupBy(data.occurrences, (o) => o.item_id);
@@ -193,10 +202,7 @@ export function searchItems(data: SearchData, query: SearchQuery, now: Date): Se
   }
 
   entries.sort(compareEntries);
-  return {
-    entries: entries.slice(query.offset, query.offset + query.limit),
-    total: entries.length,
-  };
+  return entries;
 }
 
 function scheduleFit(schedule: ScheduleSummary, purpose: SearchQuery["purpose"], includeEnded: boolean): Fit {
