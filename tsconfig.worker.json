@@ -1,8 +1,18 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2023"],
-    "types": ["@cloudflare/vitest-pool-workers/types", "./src/server/worker-configuration.d.ts"]
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "@cloudflare/vitest-pool-workers/types",
+      "./src/server/worker-configuration.d.ts"
+    ]
   },
-  "include": ["src/server", "src/domain", "test"]
+  "include": [
+    "src/server",
+    "src/domain",
+    "src/ingest",
+    "test"
+  ]
 }

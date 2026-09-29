@@ -11,7 +11,8 @@
     "db:migrate:local": "wrangler d1 migrations apply playland --local",
     "db:seed:local": "wrangler d1 execute playland --local --file fixtures/seed.sql",
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate:local && pnpm db:seed:local",
-    "cf-typegen": "wrangler types src/server/worker-configuration.d.ts"
+    "cf-typegen": "wrangler types src/server/worker-configuration.d.ts",
+    "ingest": "node --import tsx scripts/ingest/cli.ts"
   },
   "dependencies": {
     "hono": "^4.13.10",
@@ -30,10 +31,12 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "vite": "^8.3.1",
     "vitest": "~4.1.11",
-    "wrangler": "^4.143.0"
+    "wrangler": "^4.143.0",
+    "yaml": "^2.9.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "batch_id": "sample-import-001",
+  "created_at": "2026-09-29T00:00:00Z",
+  "candidates": [
+    {
+      "source": {
+        "source_id": "sample-science",
+        "url": "https://example.com/science/events",
+        "source_key": "robot-class-2026-10",
+        "fetched_at": "2026-09-29T00:00:00Z"
+      },
+      "place": { "existing_place_id": "pl-sample-science", "name": null },
+      "item": {
+        "kind": "event",
+        "title": "はじめてのロボット教室",
+        "child_description": "ロボットを うごかす プログラムを つくろう。",
+        "tag_ids": ["experiment", "crafting", "science_museum"],
+        "facility_tags_status": "assessed",
+        "experience_tags_status": "assessed",
+        "rain_policy": "ok",
+        "schedule_status": "known",
+        "occurrences": [
+          { "start_date": "2026-10-11", "end_date": "2026-10-11", "precision": "date" },
+          { "start_date": "2026-10-25", "end_date": "2026-10-25", "precision": "date" }
+        ],
+        "age_min_kind": "value",
+        "age_min": 7,
+        "age_max_kind": "unknown",
+        "eligibility_raw_text": "小学1年生以上"
+      },
+      "evidence": [
+        { "field": "item.rain_policy", "text": "館内の実験室で行います。", "source_url": "https://example.com/science/events" },
+        { "field": "item.occurrences", "text": "10月11日（日）、10月25日（日）", "source_url": "https://example.com/science/events" },
+        { "field": "item.age", "text": "対象：小学1年生以上", "source_url": "https://example.com/science/events" }
+      ],
+      "needs_review": [],
+      "suggested_tags": ["programming"]
+    },
+    {
+      "source": {
+        "source_id": "sample-city",
+        "url": "https://example.com/city/parks/river",
+        "source_key": "river-park",
+        "fetched_at": "2026-09-29T00:00:00Z"
+      },
+      "place": { "existing_place_id": null, "name": "サンプル川の親水公園", "address_text": "サンプル市かわべ町" },
+      "item": {
+        "kind": "spot",
+        "title": "サンプル川の親水公園",
+        "child_description": "あさい かわで みずあそび できるよ。",
+        "tag_ids": ["park", "water_play"],
+        "facility_tags_status": "assessed",
+        "experience_tags_status": "assessed",
+        "rain_policy": "not_suitable"
+      },
+      "evidence": [
+        { "field": "item.rain_policy", "text": "増水時は水辺に立ち入れません。", "source_url": "https://example.com/city/parks/river" }
+      ]
+    },
+    {
+      "source": {
+        "source_id": "sample-library",
+        "url": "https://example.com/library/news",
+        "source_key": "ohanashikai-2026-10-17",
+        "fetched_at": "2026-09-29T00:00:00Z"
+      },
+      "place": null,
+      "item": {
+        "kind": "event",
+        "title": "えほんの おはなし会",
+        "tag_ids": ["reading"],
+        "experience_tags_status": "assessed",
+        "schedule_status": "known",
+        "occurrences": [
+          {
+            "start_date": "2026-10-17",
+            "end_date": "2026-10-17",
+            "precision": "datetime",
+            "starts_at": "2026-10-17T10:30:00+09:00",
+            "ends_at": "2026-10-17T11:00:00+09:00"
+          }
+        ]
+      },
+      "evidence": [
+        { "field": "item.occurrences", "text": "10月17日（土）10:30〜11:00", "source_url": "https://example.com/library/news" }
+      ],
+      "needs_review": []
+    },
+    {
+      "source": {
+        "source_id": "sample-library",
+        "url": "https://example.com/library/news",
+        "source_key": "origami-2026-10-24",
+        "fetched_at": "2026-09-29T00:00:00Z"
+      },
+      "place": null,
+      "item": {
+        "kind": "event",
+        "title": "おりがみ ひろば",
+        "tag_ids": ["crafting"],
+        "experience_tags_status": "assessed"
+      },
+      "evidence": [],
+      "needs_review": ["開催日の記載が見つからない"]
+    }
+  ]
+}

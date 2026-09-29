@@ -3,7 +3,7 @@
 家族向けお出かけ発見アプリ（家族限定・非公開）。
 
 構成: React + Vite（画面） / Hono on Cloudflare Workers（API） / D1（データ） / 非公開 R2（写真） / Leaflet + 地理院タイル（地図）。
-取り込みスキル（Phase 4）は未実装。
+候補の取り込みは、リポジトリ内のスキルと固定の登録コマンドで手動実行する（本番への書き込みは未対応）。
 
 ## ローカル開発
 
@@ -30,6 +30,28 @@ pnpm build
 | `migrations/` | D1 マイグレーション |
 | `fixtures/` | 架空のテストデータのみ（実在の施設・人物を入れない） |
 | `test/` | テスト |
+
+## 候補の取り込み
+
+LLM（コードエージェント）が候補を調べて登録用 JSON を作り、固定コードが検証・照合・登録する。手順の原本は
+[skills/collect-outings/SKILL.md](skills/collect-outings/SKILL.md)。収集元は `config/sources.yaml`、タグは `src/domain/tags.ts`。
+
+```bash
+pnpm ingest export-known --target local              # 照合用の既存データ（家族の情報は含めない）
+pnpm ingest validate .local/ingest/<batch>.json      # 形式・根拠・整合（DB を見ない）
+pnpm ingest preview  .local/ingest/<batch>.json --target local
+pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3]
+```
+
+- 取り込みは新しい候補を INSERT するだけで、既存の候補・場所・親の修正・お気に入り・家族設定を変更しない（テストで確認）。
+- 同じ出典キー（`source_id` + `source_key`）は登録済みとしてスキップ。タイトルや場所名だけの一致は要確認にする。
+- 候補ごとに 1 トランザクション。途中で失敗しても、同じコマンドの再実行で残りを完了できる。
+- `--target staging / production` は、収集用の環境と本番の認証情報を分ける方式を決めるまで無効。
+- Claude Code から使うには `.claude/skills/collect-outings/SKILL.md` に原本へのリンクを置く（下記）。
+
+```bash
+mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings/SKILL.md .claude/skills/collect-outings/SKILL.md
+```
 
 ## 認証
 

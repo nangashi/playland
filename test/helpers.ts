@@ -6,6 +6,8 @@ export const ORIGIN = "http://localhost";
 export async function seed() {
   const sql = (await import("../fixtures/seed.sql?raw")).default as string;
   const clear = [
+    "import_runs",
+    "source_entries",
     "audit_log",
     "admin_login_attempts",
     "media",

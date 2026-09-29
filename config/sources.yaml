@@ -1,0 +1,33 @@
+# 収集元と収集方針（Git で管理する）。
+# - 秘密情報・自宅の住所や座標・子どもの名前は書かない
+# - 地域や施設はコードに直書きせず、ここで管理する
+# - 良い主催者を見つけたら追記する（次回の収集元になる）
+# 下の example.com の項目は形式の例（架空）。実際の収集元に置き換えてください。
+version: 1
+sources:
+  - id: parent_url
+    name: 親が見つけた URL
+    kind: parent
+    images: review
+    notes: 親が渡した URL・資料を入力として整理する
+
+  - id: sample-science
+    name: サンプル市こども科学館（例）
+    kind: museum
+    urls:
+      - https://example.com/science/events
+    images: review
+
+  - id: sample-city
+    name: サンプル市 公園・子育て情報（例）
+    kind: municipality
+    urls:
+      - https://example.com/city/parks
+    images: none
+
+  - id: sample-library
+    name: サンプル市立図書館 お知らせ（例）
+    kind: library
+    urls:
+      - https://example.com/library/news
+    images: none
