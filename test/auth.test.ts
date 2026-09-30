@@ -10,6 +10,9 @@ async function call(url: string, overrides: Partial<Env>, init?: RequestInit, ac
   return res;
 }
 
+// wrangler.jsonc の値に頼らず、Access の設定が欠けた状態を明示する
+const MISSING_ACCESS = { AUTH_MODE: "access", ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "" } as Partial<Env>;
+
 describe("家族限定の認証境界（A17）", () => {
   const paths = ["/", "/search", "/api/items", "/api/map-items", "/api/settings", "/media/x"];
 
@@ -46,7 +49,7 @@ describe("家族限定の認証境界（A17）", () => {
   });
 
   it("Access の設定が欠けていれば、検証済みの情報があっても拒否（fail closed）", async () => {
-    const res = await call("https://playland.example.workers.dev/api/settings", { AUTH_MODE: "access" } as Partial<Env>, undefined, {
+    const res = await call("https://playland.example.workers.dev/api/settings", MISSING_ACCESS, undefined, {
       aud: "",
       getIdentity: async () => undefined,
     });
@@ -55,7 +58,7 @@ describe("家族限定の認証境界（A17）", () => {
 
   it("Access の設定が欠けていれば拒否（fail closed）", async () => {
     for (const p of paths) {
-      const res = await call(`https://playland.example${p}`, { AUTH_MODE: "access" } as Partial<Env>);
+      const res = await call(`https://playland.example${p}`, MISSING_ACCESS);
       expect(res.status, p).toBe(503);
     }
   });
