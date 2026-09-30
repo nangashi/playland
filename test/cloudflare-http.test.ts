@@ -4,6 +4,7 @@ import sample from "../fixtures/ingest/sample-bundle.json";
 import { applyBundle } from "../src/ingest/apply";
 import { itemResolver, stagePhotos } from "../src/ingest/photos";
 import { httpD1, httpR2, resolveAccountId, type Fetch } from "../scripts/lib/cloudflare-http";
+import { checkBatchAtomic } from "../src/ops/check";
 import { seed } from "./helpers";
 
 // 1x1 の PNG
@@ -114,5 +115,13 @@ describe("Cloudflare HTTP API（本番への接続）", () => {
     expect((await bucket.head(`media/${staged!.media_id}`))?.size).toBe(PNG.byteLength);
     await bucket.delete(`media/${staged!.media_id}`);
     expect(await bucket.get(`media/${staged!.media_id}`)).toBeNull();
+  });
+});
+
+describe("batch の確認（pnpm ops check-batch）", () => {
+  it("失敗する batch を送り、途中の文が取り消されることを確かめ、確認用の行を残さない", async () => {
+    expect(await checkBatchAtomic(db)).toEqual({ batchFailed: true, rolledBack: true, cleanedUp: true });
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM admin_login_attempts").first<{ n: number }>();
+    expect(n?.n).toBe(0);
   });
 });

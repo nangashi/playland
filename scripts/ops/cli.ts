@@ -5,6 +5,7 @@
  *   pnpm ops copy-to-production --confirm                     ローカルのデータ・写真を空の本番へ複製
  *   pnpm ops backup  --target production|local [--out DIR]   データ・写真を .local/backups へ書き出す
  *   pnpm ops restore <DIR> --target local                     バックアップを空の DB へ復元（本番は --confirm）
+ *   pnpm ops check-batch --target production --confirm       D1 の batch が 1 トランザクションになるかを確かめる
  *
  * --state <DIR> を付けると、ローカルは既定（.wrangler/state）ではなくその保存場所を使う
  * （wrangler の --persist-to と同じ。復元の確認を別の場所で行うときに使う）
@@ -23,6 +24,7 @@ import {
   type Snapshot,
   type StoredObject,
 } from "../../src/ops/transfer";
+import { checkBatchAtomic } from "../../src/ops/check";
 import { openTarget, parseTarget, requireConfirm, UsageError, type OpenedTarget } from "../lib/target";
 
 const { positionals, values } = parseArgs({
@@ -49,8 +51,10 @@ async function main(): Promise<number> {
       return backup();
     case "restore":
       return restore();
+    case "check-batch":
+      return checkBatch();
     default:
-      console.error("使い方: pnpm ops <status|copy-to-production|backup|restore> [--target local|production] [--confirm]");
+      console.error("使い方: pnpm ops <status|copy-to-production|backup|restore|check-batch> [--target local|production] [--confirm]");
       return 2;
   }
 }
@@ -128,6 +132,19 @@ async function backup(): Promise<number> {
     if (missing.length) console.log(`見つからない写真: ${missing.join(", ")}`);
     console.log("※ 自宅の座標など家族の情報が含まれます。Git や共有フォルダに置かないでください。");
     return missing.length ? 1 : 0;
+  });
+}
+
+/** PIN の試行回数の表に確認用の行を書き、必ず消す（家族のデータには触れない） */
+async function checkBatch(): Promise<number> {
+  const target = parseTarget(values.target);
+  requireConfirm(target, values.confirm, "batch の確認（確認用の行を書いて消す）");
+  return withTarget(target, async (t) => {
+    const r = await checkBatchAtomic(t.env.DB);
+    console.log(`batch の失敗: ${r.batchFailed ? "失敗として返った" : "成功として返った（想定外）"}`);
+    console.log(r.rolledBack ? "✓ 途中の文は取り消された（1 トランザクション）" : "✗ 途中の文が残った（トランザクションではない）");
+    if (!r.cleanedUp) console.log("✗ 確認用の行（admin_login_attempts の __batch_probe__）を消せませんでした");
+    return r.batchFailed && r.rolledBack && r.cleanedUp ? 0 : 1;
   });
 }
 
