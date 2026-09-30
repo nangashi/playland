@@ -12,6 +12,7 @@ import type {
 } from "./model";
 import type { UnknownReason } from "./search";
 import type { ModeView } from "./transport";
+import type { TripKind } from "./trip";
 
 /** 画面と API で共有するレスポンス型 */
 
@@ -42,10 +43,10 @@ export interface ItemCard {
   /** 場所不明なら null */
   travel: ModeView[] | null;
   matched_modes: TransportMode[] | null;
+  /** 自宅からの距離で分けた日帰り・旅行。座標がなければ null */
+  trip: TripKind | null;
   cover: MediaRef | null;
-  /** カードに出す参加条件の要約 */
-  age_min_kind: ItemRecord["age_min_kind"];
-  age_min: number | null;
+  /** カードに出す条件の要約 */
   reservation_requirement: ItemRecord["reservation_requirement"];
   price_status: ItemRecord["price_status"];
 }

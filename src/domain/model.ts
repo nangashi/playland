@@ -87,6 +87,8 @@ export interface PlaceRecord {
   google_maps_url: string | null;
   position_source: PositionSource | null;
   position_note: string | null;
+  /** 自宅からの直線距離（km）。登録・座標や自宅の変更時に保存する。座標がなければ null */
+  home_distance_km: number | null;
   version: number;
 }
 

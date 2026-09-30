@@ -237,6 +237,30 @@ describe("apply（登録）", () => {
     }
   });
 
+  it("新しい場所には、登録時に自宅からの距離を保存する（日帰り・旅行の判定用）", async () => {
+    await env.DB.prepare("UPDATE family_settings SET origin_latitude = 35.68, origin_longitude = 139.76 WHERE id = 1").run();
+    const b = clone();
+    Object.assign(b.candidates[1]!.place, {
+      latitude: 36.68,
+      longitude: 139.76,
+      position_accuracy: "exact",
+      position_source: "source_page",
+    });
+    const r = await apply(b);
+    const itemId = r.outcomes[1]!.item_id!;
+    const row = await env.DB.prepare(
+      "SELECT p.home_distance_km FROM places p JOIN items i ON i.place_id = p.id WHERE i.id = ?",
+    )
+      .bind(itemId)
+      .first<{ home_distance_km: number | null }>();
+    expect(row?.home_distance_km).toBe(111.2);
+    const detail: ItemDetailResponse = await (await get(`/api/items/${itemId}`)).json();
+    expect(detail.trip).toBe("trip");
+    // 座標のない場所は距離なし
+    const noCoords: ItemDetailResponse = await (await get(`/api/items/${r.outcomes[0]!.item_id}`)).json();
+    expect(noCoords.trip).toBeNull();
+  });
+
   it("取り込んだ候補は一覧・保存でそのまま使える", async () => {
     const r = await apply(sample);
     const id = r.outcomes[1]!.item_id!;

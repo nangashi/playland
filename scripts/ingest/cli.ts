@@ -8,6 +8,7 @@
  *   pnpm ingest preview  <bundle.json> --target local 新規・既存・要確認・エラーの一覧
  *   pnpm ingest apply    <bundle.json> --target local [--accept 1,3]
  *   pnpm ingest geocode  --target local [--apply]      住所から座標を取得（国土地理院 住所検索）
+ *   pnpm ingest distances --target local               すべての場所の自宅からの距離を計算し直す
  *   pnpm ingest photos-fetch <photos.json> --target local           写真の候補を取得し確認ページを作る
  *   pnpm ingest photos-apply <photos.json> --target local --accept 1,3  採用した写真を保存
  *   pnpm ingest enrich-export  --target local [--all]  空欄の残る候補を書き出す（既定は管理画面で追加した候補）
@@ -16,7 +17,7 @@
  *   pnpm ingest enrich-apply    <enrich.json> --target local --accept 0,2|all  空欄だけを埋める
  *
  * --target production は wrangler login の認証で本番の D1・R2 に接続する。
- * 本番への書き込み（apply / geocode --apply / photos-apply / enrich-apply）には --confirm が必要。
+ * 本番への書き込み（apply / geocode --apply / distances / photos-apply / enrich-apply）には --confirm が必要。
  * エージェントは preview の結果を親に見せ、承認を得てから --confirm を付ける。
  */
 import { createHash } from "node:crypto";
@@ -35,6 +36,7 @@ import {
 } from "../../src/ingest/enrich";
 import { geocodePlaces, gsiGeocoder } from "../../src/ingest/geocode";
 import { loadKnown } from "../../src/ingest/known";
+import { getOrigin, refreshHomeDistances } from "../../src/server/repo";
 import { openTarget, parseTarget, requireConfirm, UsageError, type TargetEnv } from "../lib/target";
 import { applyFetchedPhotos, fetchPhotos, readPhotoList } from "./photos";
 import { loadSources } from "./sources";
@@ -73,6 +75,8 @@ async function main(): Promise<number> {
       return withDb((db) => apply(db, requireFile()), "候補の登録");
     case "geocode":
       return withDb((db) => geocode(db), values.apply ? "座標の保存" : undefined);
+    case "distances":
+      return withDb((db) => distances(db), "自宅からの距離の保存");
     case "photos-fetch":
       return withDb((db) => photosFetch(db, requireFile()));
     case "photos-apply":
@@ -87,7 +91,7 @@ async function main(): Promise<number> {
       return withDb((db) => enrichApply(db, requireFile()), "候補の補足");
     default:
       console.error(
-        "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|photos-fetch|photos-apply|enrich-export|enrich-validate|enrich-preview|enrich-apply> [file] --target local",
+        "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|distances|photos-fetch|photos-apply|enrich-export|enrich-validate|enrich-preview|enrich-apply> [file] --target local",
       );
       return 2;
   }
@@ -222,6 +226,16 @@ async function geocode(db: D1Database): Promise<number> {
     }
   }
   if (!values.apply) console.log("\n確認のみです。保存するには --apply を付けて再実行してください（位置は「おおよそ」として保存）。");
+  return 0;
+}
+
+async function distances(db: D1Database): Promise<number> {
+  if (!(await getOrigin(db))) {
+    console.error("自宅の座標が未設定です。管理画面の設定で自宅の位置を入れてください");
+    return 1;
+  }
+  const changed = await refreshHomeDistances(db);
+  console.log(`${changed} か所の距離を更新しました`);
   return 0;
 }
 

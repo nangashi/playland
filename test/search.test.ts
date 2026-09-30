@@ -1,3 +1,4 @@
+import { homeDistanceKm } from "../src/domain/trip";
 import { describe, expect, it } from "vitest";
 import { parseSearchQuery, searchItems, type SearchResult } from "../src/domain/search";
 import { data, estimate, makeItem, pref, query } from "./factories";
@@ -250,5 +251,49 @@ describe("parseSearchQuery", () => {
   it("移動手段はカンマ区切りを重複なしで受け取る", () => {
     const r = parseSearchQuery(new URLSearchParams("modes=car,bicycle,car"));
     expect(r.success && r.data.modes).toEqual(["car", "bicycle"]);
+  });
+});
+
+describe("日帰り・旅行（場所に保存した自宅からの距離）", () => {
+  const d = data({
+    items: ["near", "edge", "far", "no-distance", "no-place"].map((id) =>
+      makeItem(id, id === "no-place" ? { place_id: null } : {}),
+    ),
+    places: [
+      { id: "pl-near", home_distance_km: 12.3 },
+      { id: "pl-edge", home_distance_km: 100 },
+      { id: "pl-far", home_distance_km: 150.2 },
+      { id: "pl-no-distance", home_distance_km: null },
+    ],
+  });
+
+  it("100km 以内は日帰り、それより遠いと旅行", () => {
+    const r = searchItems(d, query());
+    expect(Object.fromEntries(r.entries.map((e) => [e.item.id, e.trip]))).toEqual({
+      near: "day_trip",
+      edge: "day_trip",
+      far: "trip",
+      "no-distance": null,
+      "no-place": null,
+    });
+    expect(ids(searchItems(d, query({ trip: "day_trip" }))).sort()).toEqual(["edge", "near"]);
+    expect(ids(searchItems(d, query({ trip: "trip" })))).toEqual(["far"]);
+  });
+
+  it("距離がなければ不明扱い（わからないものも見るときだけ出す）", () => {
+    const r = searchItems(d, query({ trip: "day_trip", include_unknown: "true" }));
+    expect(ids(r)).not.toContain("far");
+    expect(r.entries.find((e) => e.item.id === "no-distance")?.unknown).toEqual(["trip"]);
+    expect(r.entries.find((e) => e.item.id === "no-place")?.unknown).toEqual(["trip"]);
+  });
+});
+
+describe("自宅からの距離", () => {
+  const home = { latitude: 35.68, longitude: 139.76 };
+  it("座標から小数 1 桁の km で求め、座標がなければ null", () => {
+    // 北へ緯度 1 度 ≒ 111.2km
+    expect(homeDistanceKm({ latitude: 36.68, longitude: 139.76 }, home)).toBe(111.2);
+    expect(homeDistanceKm({ latitude: null, longitude: null }, home)).toBeNull();
+    expect(homeDistanceKm({ latitude: 36.68, longitude: 139.76 }, null)).toBeNull();
   });
 });

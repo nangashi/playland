@@ -1,7 +1,8 @@
 import type { PublicSettingsResponse } from "../../domain/api";
-import { modeLabel } from "../../domain/labels";
+import { modeLabel, tripLabel } from "../../domain/labels";
 import { transportModes, type TransportMode } from "../../domain/model";
 import { CATEGORIES } from "../../domain/tags";
+import { DAY_TRIP_MAX_KM, tripKinds } from "../../domain/trip";
 import { AGE_CHOICES, MINUTE_CHOICES, type SearchState } from "../searchState";
 
 interface Props {
@@ -106,6 +107,18 @@ export function FilterBar({ state, settings, onChange }: Props) {
               ))}
             </select>
           </label>
+          {tripKinds.map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={state.trip === t}
+              className={state.trip === t ? "chip is-active" : "chip"}
+              onClick={() => onChange({ trip: state.trip === t ? null : t })}
+              title={`${settings.origin_label}から直線で${DAY_TRIP_MAX_KM}km${t === "day_trip" ? "以内" : "より遠い"}場所`}
+            >
+              {tripLabel[t]}
+            </button>
+          ))}
         </div>
       </div>
     </section>
