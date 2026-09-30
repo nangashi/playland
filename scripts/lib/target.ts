@@ -1,4 +1,5 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
+import { httpD1, httpR2, resolveAccountId } from "./cloudflare-http";
 
 export type Target = "local" | "production";
 
@@ -41,8 +42,9 @@ async function readWranglerConfig(): Promise<Record<string, unknown>> {
 }
 
 /**
- * ローカル（wrangler dev と同じ .wrangler/state）または本番（リモートバインディング）の D1・R2 を開く。
- * 本番は wrangler login の認証を使う。
+ * ローカル（wrangler dev と同じ .wrangler/state）または本番の D1・R2 を開く。
+ * 本番は、環境変数 CLOUDFLARE_API_TOKEN があれば HTTP API（プロキシ経由でも動く。エージェントはこちら）、
+ * なければ wrangler login の認証でリモートバインディングを使う。
  */
 export async function openTarget(target: Target, options: { localState?: string } = {}): Promise<OpenedTarget> {
   const { getPlatformProxy } = await import("wrangler");
@@ -57,6 +59,14 @@ export async function openTarget(target: Target, options: { localState?: string 
   const d1 = (config.d1_databases as { database_id?: string }[] | undefined)?.[0];
   if (!d1?.database_id || d1.database_id === PLACEHOLDER_DB_ID) {
     throw new UsageError("本番の D1 がまだ設定されていません（wrangler.jsonc の database_id）。docs/production.md の手順で作成してください");
+  }
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (token) {
+    const bucket = (config.r2_buckets as { bucket_name: string }[] | undefined)?.[0]?.bucket_name;
+    if (!bucket) throw new UsageError("wrangler.jsonc に R2 のバケットが設定されていません");
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || (await resolveAccountId(token));
+    const api = { token, accountId };
+    return { target, env: { DB: httpD1(api, d1.database_id), MEDIA: httpR2(api, bucket) }, dispose: async () => {} };
   }
   // 本番の DB・バケットだけをリモートにした一時設定（Git 管理外。終了時に削除）。
   // リモートバインディングは Worker のプレビューを経由するため、名前をアプリ本体と分ける。
