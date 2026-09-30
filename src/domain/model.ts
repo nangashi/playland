@@ -157,6 +157,10 @@ export interface BookmarkRecord {
   rank: number;
 }
 
+/** active=表示 / hidden=親が非表示にした / pending=取り込みで集めて親の採用待ち（表示しない） */
+export const mediaStatuses = ["active", "hidden", "pending"] as const;
+export type MediaStatus = (typeof mediaStatuses)[number];
+
 export interface MediaRecord {
   id: string;
   r2_key: string;
@@ -169,7 +173,7 @@ export interface MediaRecord {
   license_note: string | null;
   content_type: string;
   byte_size: number;
-  status: "active" | "hidden";
+  status: MediaStatus;
   sort_order: number;
   created_at: string;
 }

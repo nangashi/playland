@@ -104,18 +104,7 @@ export interface MediaInfo extends MediaRef {
 export interface ItemDetailResponse extends Omit<ItemCard, "place"> {
   official_url: string | null;
   place: PlaceDetail | null;
-  eligibility: Pick<
-    ItemRecord,
-    | "age_min_kind"
-    | "age_min"
-    | "age_max_kind"
-    | "age_max"
-    | "eligibility_raw_text"
-    | "guardian_rule"
-    | "sibling_rule"
-  >;
-  recommended_age_min: number | null;
-  recommended_age_max: number | null;
+  eligibility: Pick<ItemRecord, "guardian_rule" | "sibling_rule">;
   reservation_note: string | null;
   price_text: string | null;
   media: MediaInfo[];
@@ -160,7 +149,7 @@ export interface AdminPlaceResponse {
 }
 
 export interface AdminItemSummary
-  extends Pick<ItemRecord, "id" | "title" | "publish_status" | "place_id" | "updated_at" | "version"> {
+  extends Pick<ItemRecord, "id" | "title" | "publish_status" | "place_id" | "updated_at"> {
   place_name: string | null;
 }
 
@@ -173,3 +162,28 @@ export interface AdminPlaceListResponse {
 }
 
 export type AdminSettingsResponse = FamilySettingsRecord;
+
+/** 取り込みの出典（根拠・要確認・タグの提案）。承認待ちの画面で親が確認する */
+export interface AdminSourceEntry {
+  source_id: string;
+  url: string;
+  fetched_at: string;
+  batch_id: string;
+  evidence: { field: string; text: string; source_url: string }[];
+  needs_review: string[];
+  suggested_tags: string[];
+}
+
+export interface AdminInboxEntry {
+  item: ItemRecord;
+  tag_ids: string[];
+  place: PlaceRecord | null;
+  sources: AdminSourceEntry[];
+  /** 候補の写真（採用待ちを含む） */
+  media: MediaRecord[];
+}
+
+/** 下書きの候補と、採用待ちの写真がある候補 */
+export interface AdminInboxResponse {
+  entries: AdminInboxEntry[];
+}

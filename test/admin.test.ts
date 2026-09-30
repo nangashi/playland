@@ -174,7 +174,7 @@ describe("候補の編集", () => {
     expect(detail).toMatchObject({
       rain_policy: "unknown",
       cover: null,
-      eligibility: { age_min_kind: "unknown", guardian_rule: "unknown" },
+      eligibility: { guardian_rule: "unknown" },
       reservation_requirement: "unknown",
       price_status: "unknown",
     });

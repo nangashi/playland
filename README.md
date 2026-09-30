@@ -51,15 +51,20 @@ git worktree remove ../playland.worktrees/feat-<名前>   # 片付け（コピ�
 LLM（コードエージェント）が候補を調べて登録用 JSON を作り、固定コードが検証・照合・登録する。手順の原本は
 [skills/collect-outings/SKILL.md](skills/collect-outings/SKILL.md)。収集元は `config/sources.yaml`、タグは `src/domain/tags.ts`。
 
+候補は **下書き**、写真は **採用待ち** で登録され、家族の画面には出ない。親は管理画面の「承認待ち」（`/admin/inbox`）で
+内容・根拠・確認してほしい点・写真を見て、写真を選んで「公開する」か「見送る」を押す（見送った候補は非表示で残り、再び取り込まれない）。
+コマンドの実行はエージェントが行い、親は承認待ちの URL を開くだけにする。
+
 ```bash
 pnpm ingest export-known --target local              # 照合用の既存データ（家族の情報は含めない）
 pnpm ingest validate .local/ingest/<batch>.json      # 形式・根拠・整合（DB を見ない）
+pnpm ingest run      .local/ingest/<batch>.json --target local [--photos .local/ingest/<photos>.json]
+                                                     # 下書きで登録→座標→距離→写真を採用待ちで保存（通常はこれだけ）
 pnpm ingest preview  .local/ingest/<batch>.json --target local
-pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3]
+pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3|all]   # 下書きで登録だけ
 pnpm ingest geocode --target local [--apply]         # 住所から座標（国土地理院 住所検索・おおよその位置）
 pnpm ingest distances --target local                 # すべての場所の自宅からの距離を計算し直す（既存データの補完）
-pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真候補を取得し確認ページを作る
-pnpm ingest photos-apply .local/ingest/<photos>.json --target local --accept 0,3
+pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真を取得して採用待ちで保存
 pnpm ingest enrich-export --target local [--all]                  # 空欄の残る候補（既定は管理画面で追加した候補）
 pnpm ingest enrich-preview .local/ingest/<enrich>.json --target local
 pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0,2|all
@@ -67,9 +72,10 @@ pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0
 
 - 補足（enrich）は、既存の候補の空欄（unknown・null・未判定のタグ・場所の住所）だけを埋める。値の入った項目は変えず、
   書き出したときの版と一致する候補だけを更新する。親の確認日時は変えず、根拠は出典（`source_entries`）に残す。
-  写真のない候補も書き出し、写真リストでは出典キーの代わりに `item_id` で候補を指定できる（取得・確認・保存は photos-fetch / photos-apply）。
+  写真のない候補も書き出し、写真リストでは出典キーの代わりに `item_id` で候補を指定できる（取得と採用待ちでの保存は photos-fetch）。
 
-- 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に保存する。親が確認ページで採用したものだけを保存する。
+- 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に「採用待ち」で保存する。
+  親が承認待ちの画面で採用したものだけを表示し、採用しなかったものは消す。
 - 画像の取得は https のみ・内部アドレス拒否（名前解決後に確認）・リダイレクト先も再検査・5MB まで・実際の内容で形式を判定。
 - 座標は、住所があり座標がなく親が指定していない場所だけを埋める。親が地図で直した位置は上書きしない。
 
@@ -98,7 +104,7 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 - 親の編集は版番号付き。古い版での保存は 409 で拒否し、何も書き換えない。
 - 所要時間は出発地の版・手段・取得元（manual / api）ごとに保存し、親の値を優先する。出発地を変えると古い値は使わない。
 - 保存したものは「ランキング」画面で家族共有の順に並べ替えられる（誰でも可。非公開・興味なしは外し、順位は残す。新しく保存したものは最後）。
-- 絞り込みは「カテゴリ（1 つ選ぶ。含まれるタグのどれかに当てはまれば一致）」と「条件（保存済み・雨の日でも遊べる・年齢・移動・日帰り／旅行）」の 2 段。
+- 絞り込みは「カテゴリ（1 つ選ぶ。含まれるタグのどれかに当てはまれば一致）」と「条件（保存済み・雨の日でも遊べる・移動・日帰り／旅行）」の 2 段。
 - 日帰り／旅行は、自宅から場所までの直線距離で分ける（100km 以内が日帰り。`src/domain/trip.ts`）。
   距離は場所ごとに保存する（`places.home_distance_km`）。取り込みで場所を登録したとき・住所検索や親のピン修正で座標が変わったとき・
   管理画面で自宅を保存したときに計算する。自宅の座標は Git に置かず、管理画面の設定（DB）だけに持つ。座標がなければ不明として扱う。

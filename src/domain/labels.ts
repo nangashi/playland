@@ -1,5 +1,4 @@
 import type {
-  AgeBoundKind,
   GuardianRule,
   MediaKind,
   PriceStatus,
@@ -35,7 +34,6 @@ export const modeShortLabel: Record<TransportMode, string> = {
 export const unknownReasonLabel: Record<UnknownReason, string> = {
   category: "カテゴリ",
   rain: "雨天対応",
-  age: "対象年齢",
   travel: "移動時間",
   trip: "距離",
 };
@@ -75,10 +73,3 @@ export const priceLabel: Record<PriceStatus, string> = {
   paid: "有料",
   unknown: "料金：未確認",
 };
-
-export function ageRuleText(minKind: AgeBoundKind, min: number | null, maxKind: AgeBoundKind, max: number | null) {
-  if (minKind === "unknown" && maxKind === "unknown") return "対象年齢：未確認";
-  const lower = minKind === "value" ? `${min}歳から` : minKind === "none" ? "下限なし" : "下限は未確認";
-  const upper = maxKind === "value" ? `${max}歳まで` : maxKind === "none" ? "上限なし" : "上限は記載なし（未確認）";
-  return `${lower}・${upper}`;
-}

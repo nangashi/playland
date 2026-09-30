@@ -7,6 +7,7 @@ import { matchCandidates, type MatchResult, type PlaceResolution } from "./match
 /**
  * 取り込みの登録。新しい候補を INSERT するだけで、既存の行を UPDATE / DELETE する経路を持たない。
  * LLM 由来の設定はここで初回だけ保存され、以後は親の編集でしか変わらない。
+ * 候補は下書き（draft）で登録し、家族の画面には出さない。親が承認待ちの画面で公開するか見送るかを決める。
  */
 
 export interface PlannedStatement {
@@ -32,6 +33,8 @@ export function planCandidate(
   now: string,
   /** 自宅の座標（新しい場所の距離を登録時に保存する）。未設定なら null */
   origin: LatLng | null = null,
+  /** 照合で見つかった確認事項（同名の場所・候補など）。要確認として承認待ちの画面に出す */
+  matchNotes: readonly string[] = [],
 ): PlannedStatement[] {
   const stmts: PlannedStatement[] = [];
   const { item, source } = candidate;
@@ -71,7 +74,7 @@ export function planCandidate(
                              guardian_rule, sibling_rule, recommended_age_min, recommended_age_max,
                              reservation_requirement, reservation_note, price_status, price_text,
                              initialized_at, created_at, updated_at)
-          VALUES (?, 'spot', ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, 'spot', ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       ids.itemId,
       placeId,
@@ -116,7 +119,7 @@ export function planCandidate(
       source.url,
       new Date(source.fetched_at).toISOString(),
       JSON.stringify(candidate.evidence),
-      JSON.stringify(candidate.needs_review),
+      JSON.stringify([...matchNotes, ...candidate.needs_review]),
       JSON.stringify(candidate.suggested_tags),
       JSON.stringify(candidate.image_candidates),
       batchId,
@@ -138,8 +141,10 @@ export async function previewBundle(db: D1Database, bundle: Bundle): Promise<Pre
 }
 
 export interface ApplyOptions {
-  /** 要確認（review）のうち、親が確認して登録を認めた候補の番号 */
-  accept?: ReadonlySet<number>;
+  /**
+   * 要確認（review）のうち登録する候補の番号。"all" はすべて（下書きで登録し、親が承認待ちの画面で確認する）
+   */
+  accept?: ReadonlySet<number> | "all";
   target: string;
   inputHash: string;
   now?: () => Date;
@@ -190,7 +195,8 @@ export async function applyBundle(db: D1Database, raw: unknown, options: ApplyOp
       outcomes.push({ ...base, result: "error", item_id: null, reason: match.reasons.join(" / ") });
       continue;
     }
-    if (match.status === "review" && !options.accept?.has(match.index)) {
+    const accepted = options.accept === "all" || options.accept?.has(match.index) === true;
+    if (match.status === "review" && !accepted) {
       outcomes.push({ ...base, result: "skipped_review", item_id: null, reason: match.reasons.join(" / ") });
       continue;
     }
@@ -199,7 +205,9 @@ export async function applyBundle(db: D1Database, raw: unknown, options: ApplyOp
       placeId: newId(),
       sourceEntryId: newId(),
     };
-    const plan = planCandidate(candidate, match.place, ids, bundle.batch_id, now().toISOString(), origin);
+    // needs_review は出典にそのまま残すので、照合で加わった事項だけを渡す
+    const matchNotes = match.reasons.filter((r) => !r.startsWith("要確認: "));
+    const plan = planCandidate(candidate, match.place, ids, bundle.batch_id, now().toISOString(), origin, matchNotes);
     try {
       await db.batch(plan.map((s) => db.prepare(s.sql).bind(...s.params)));
       outcomes.push({ ...base, result: "inserted", item_id: ids.itemId, reason: null });

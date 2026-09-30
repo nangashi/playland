@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
 import { createItem, fetchAdminPlaces } from "../../api";
 import { AdminFrame, requireParentSession, SaveMessage, useSave } from "./common";
 
@@ -85,18 +85,14 @@ export function AdminNewItemPage() {
       </section>
 
       <section className="section admin-note">
-        <h3 className="admin-subtitle">まとめて集めて追加する（登録の承認）</h3>
-        <p>
-          施設をまとめて集める取り込みの承認は、<strong>この管理画面ではなく Claude Code とのやり取りの中</strong>で行います。
-        </p>
+        <h3 className="admin-subtitle">まとめて集めて追加する</h3>
         <ol>
           <li>Claude Code に「お出かけ先を集めて」「この URL を候補に追加して」と頼む</li>
-          <li>新規・既存・要確認の一覧（プレビュー）がチャットに出るので、登録してよい番号を伝える</li>
-          <li>写真は、案内される確認ページ（review.html）で採用する番号を選んで伝える</li>
+          <li>
+            集めた候補は下書き、写真は採用待ちとして<Link to="/admin/inbox">「承認待ち」タブ</Link>に入る
+          </li>
+          <li>承認待ちで内容と写真を確かめ、「公開する」か「見送る」を選ぶ（公開するまで家族の画面には出ません）</li>
         </ol>
-        <p className="muted">
-          承認して登録された候補は「候補の一覧」タブに並び、内容の修正や非表示への切り替えはそこから行えます。
-        </p>
       </section>
     </AdminFrame>
   );

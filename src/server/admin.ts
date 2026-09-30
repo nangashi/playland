@@ -7,6 +7,7 @@ import {
   MAX_MEDIA_BYTES,
   PLACE_PATCH_COLUMNS,
   itemCreateSchema,
+  inboxDecisionSchema,
   itemPatchSchema,
   mediaUploadFieldsSchema,
   pinSchema,
@@ -15,6 +16,7 @@ import {
   transportPatchSchema,
 } from "../domain/admin";
 import type {
+  AdminInboxResponse,
   AdminItemListResponse,
   AdminItemResponse,
   AdminPlaceListResponse,
@@ -176,6 +178,85 @@ adminApi.patch("/items/:id", async (c) => {
   });
   if (res) return res;
   if ((results.at(-1)?.meta.changes ?? 0) === 0) return conflict(c, (await repo.getItem(db, id.data))?.version);
+  return c.json({ id: id.data, version: version + 1 });
+});
+
+// ---- 承認待ち（取り込みの下書きと採用待ちの写真） ----
+
+adminApi.get("/inbox", async (c) => {
+  const body: AdminInboxResponse = { entries: await repo.listInbox(c.env.DB) };
+  return c.json(body);
+});
+
+/**
+ * 親の判断を 1 トランザクションで反映する（候補の版が一致するときだけ）。
+ * 採用した写真を表示にし、採用しなかった採用待ちの写真は消す（家族内の利用として親が認めたものだけを残す）
+ */
+adminApi.post("/inbox/:id", async (c) => {
+  const id = idSchema.safeParse(c.req.param("id"));
+  if (!id.success) return notFound(c);
+  const input = await parseJson(c, inboxDecisionSchema);
+  if (!input) return c.json({ error: "invalid" }, 400);
+  const db = c.env.DB;
+  const current = await repo.getItem(db, id.data);
+  if (!current) return notFound(c);
+  if (input.decision !== "photos" && current.publish_status !== "draft") {
+    return c.json({ error: "下書きではありません。読み込み直してください", current_version: current.version }, 409);
+  }
+
+  const now = new Date().toISOString();
+  const actor = actorOf(c);
+  const { version } = input;
+  const guard = `EXISTS (SELECT 1 FROM items WHERE id = ? AND version = ?)`;
+  const g = [id.data, version];
+  const accept = input.decision === "reject" ? [] : input.accept_media_ids;
+  const { results: pending } = await db
+    .prepare(`SELECT id, r2_key FROM media WHERE item_id = ? AND status = 'pending'`)
+    .bind(id.data)
+    .all<{ id: string; r2_key: string }>();
+  const acceptSet = new Set(accept);
+  const discarded = pending.filter((m) => !acceptSet.has(m.id));
+
+  const stmts: D1PreparedStatement[] = [];
+  for (const mediaId of accept) {
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE media SET status = 'active', reviewed_by = ?, reviewed_at = ?
+            WHERE id = ? AND item_id = ? AND status = 'pending' AND ${guard}`,
+        )
+        .bind(actor, now, mediaId, id.data, ...g),
+    );
+  }
+  for (const m of discarded) {
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO audit_log (target_type, target_id, action, actor, version_after, changed_fields, created_at)
+           SELECT 'media', ?, 'hide', ?, NULL, '["deleted"]', ? WHERE ${guard}`,
+        )
+        .bind(m.id, actor, now, ...g),
+      db.prepare(`DELETE FROM media WHERE id = ? AND status = 'pending' AND ${guard}`).bind(m.id, ...g),
+    );
+  }
+  const status = input.decision === "publish" ? "published" : input.decision === "reject" ? "hidden" : current.publish_status;
+  stmts.push(
+    auditGuarded(db, c, "item", id.data, version, input.decision === "photos" ? ["media"] : ["publish_status"], now, guard, g),
+    db
+      .prepare(
+        `UPDATE items SET publish_status = ?, parent_reviewed_at = ?, updated_at = ?, version = version + 1
+          WHERE id = ? AND version = ?`,
+      )
+      .bind(status, now, now, ...g),
+  );
+  let results: D1Result[] = [];
+  const res = await runWrite(c, async () => {
+    results = await db.batch(stmts);
+  });
+  if (res) return res;
+  if ((results.at(-1)?.meta.changes ?? 0) === 0) return conflict(c, (await repo.getItem(db, id.data))?.version);
+  // D1 から消した写真のファイルを消す（失敗しても参照は残らないので、表示には影響しない）
+  await Promise.all(discarded.map((m) => c.env.MEDIA.delete(m.r2_key).catch((e) => console.error("media delete failed", m.id, e))));
   return c.json({ id: id.data, version: version + 1 });
 });
 
@@ -471,6 +552,25 @@ adminApi.post("/media", async (c) => {
   return c.json({ id, content_type: contentType }, 201);
 });
 
+/** 親の画面用の写真（非表示・採用待ちも返す）。公開用の /media/:id は表示中の写真だけ */
+adminApi.get("/media/:id/file", async (c) => {
+  const id = idSchema.safeParse(c.req.param("id"));
+  if (!id.success) return notFound(c);
+  const media = await repo.getMedia(c.env.DB, id.data);
+  const object = media ? await c.env.MEDIA.get(media.r2_key) : null;
+  if (!media || !object) return notFound(c);
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": media.content_type,
+      "Content-Length": String(object.size),
+      "Cache-Control": "private, no-store",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Content-Disposition": "inline",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+});
+
 adminApi.patch("/media/:id", async (c) => {
   const id = idSchema.safeParse(c.req.param("id"));
   if (!id.success) return notFound(c);
@@ -486,7 +586,8 @@ adminApi.patch("/media/:id", async (c) => {
   const now = new Date().toISOString();
   const [, result] = await db.batch([
     audit(db, c, "media", id.data, status === "hidden" ? "hide" : "update", null, ["status"], now),
-    db.prepare(`UPDATE media SET status = ? WHERE id = ?`).bind(status, id.data),
+    // 採用待ちの写真は承認待ちの画面で扱う
+    db.prepare(`UPDATE media SET status = ? WHERE id = ? AND status != 'pending'`).bind(status, id.data),
   ]);
   if ((result?.meta.changes ?? 0) === 0) return notFound(c);
   return c.body(null, 204);

@@ -3,7 +3,7 @@ import { modeLabel, tripLabel } from "../../domain/labels";
 import { transportModes, type TransportMode } from "../../domain/model";
 import { CATEGORIES } from "../../domain/tags";
 import { DAY_TRIP_MAX_KM, tripKinds } from "../../domain/trip";
-import { AGE_CHOICES, MINUTE_CHOICES, type SearchState } from "../searchState";
+import { MINUTE_CHOICES, type SearchState } from "../searchState";
 
 interface Props {
   state: SearchState;
@@ -67,20 +67,6 @@ export function FilterBar({ state, settings, onChange }: Props) {
           >
             雨の日でも遊べる
           </button>
-          <label className={state.age !== null ? "select-chip is-active" : "select-chip"}>
-            <span className="visually-hidden">参加できる年齢</span>
-            <select
-              value={state.age ?? ""}
-              onChange={(e) => onChange({ age: e.target.value === "" ? null : Number(e.target.value) })}
-            >
-              <option value="">年齢：指定なし</option>
-              {AGE_CHOICES.map((a) => (
-                <option key={a} value={a}>
-                  {a}歳が参加できる
-                </option>
-              ))}
-            </select>
-          </label>
           {transportModes.map((m) => (
             <button
               key={m}

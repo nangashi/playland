@@ -773,14 +773,6 @@ button.link-button {
 .rain-ok { color: var(--ok); }
 .rain-conditional { color: var(--warn); }
 
-.raw-text {
-  margin-top: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--surface-2);
-  font-size: 12px;
-}
-
 .travel-table {
   width: 100%;
   border-collapse: collapse;
@@ -1150,9 +1142,44 @@ button.link-button {
   white-space: nowrap;
 }
 
+@media (max-width: 480px) {
+  .admin-tab {
+    padding: 8px 7px;
+    font-size: 13px;
+  }
+
+  .admin-tab-count {
+    margin-left: 3px;
+  }
+}
+
 .admin-tab.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+.admin-tab-count {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.admin-tab-count.is-alert {
+  background: var(--save);
+  color: var(--accent-text);
+}
+
+.admin-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
 }
 
 .admin-back {
@@ -1536,4 +1563,109 @@ button.link-button {
   text-align: center;
   writing-mode: vertical-rl;
   margin: 0 auto;
+}
+
+/* 承認待ち */
+.inbox-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.inbox-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inbox-head .section-title {
+  margin: 0;
+}
+
+.inbox-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.inbox-facts {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.inbox-review {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--surface-2);
+  font-size: 14px;
+}
+
+.inbox-review ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
+.inbox-evidence {
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.inbox-evidence ul {
+  padding-left: 20px;
+}
+
+.inbox-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.inbox-photo {
+  position: relative;
+  display: block;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface-2);
+}
+
+.inbox-photo.is-on {
+  border-color: var(--accent);
+}
+
+.inbox-photo input {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+}
+
+.inbox-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.inbox-photo:not(.is-on) img {
+  opacity: 0.45;
+}
+
+.inbox-photo-caption {
+  display: block;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.inbox-actions {
+  align-items: center;
 }

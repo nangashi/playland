@@ -9,3 +9,5 @@ dist/
 .local/
 *.log
 .wrangler-remote.tmp.json
+# Claude Code の個人設定（API トークンなどを書く）
+.claude/settings.local.json

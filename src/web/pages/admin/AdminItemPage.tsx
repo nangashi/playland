@@ -18,7 +18,7 @@ import {
   type MediaKind,
 } from "../../../domain/model";
 import { TAGS } from "../../../domain/tags";
-import { fetchAdminItem, fetchAdminPlaces, patchItem, setMediaStatus, uploadMedia } from "../../api";
+import { adminMediaUrl, fetchAdminItem, fetchAdminPlaces, patchItem, setMediaStatus, uploadMedia } from "../../api";
 import { AdminFrame, numberField, numberOrNull, requireParentSession, SaveMessage, useSave } from "./common";
 
 export async function adminItemLoader(args: LoaderFunctionArgs) {
@@ -392,19 +392,26 @@ function MediaSection({ data, reload }: { data: AdminItemResponse; reload: () =>
       </p>
       <div className="gallery">
         {data.media.map((m) => (
-          <figure key={m.id} className={m.status === "hidden" ? "photo is-hidden" : "photo"}>
-            <img src={`/media/${encodeURIComponent(m.id)}`} alt="" loading="lazy" />
+          <figure key={m.id} className={m.status === "active" ? "photo" : "photo is-hidden"}>
+            <img src={adminMediaUrl(m.id)} alt="" loading="lazy" />
             <figcaption className="photo-kind">
               {m.caption ?? mediaKindLabel[m.kind]}
               {m.status === "hidden" && "（非表示）"}
+              {m.status === "pending" && "（採用待ち）"}
             </figcaption>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => run(() => setMediaStatus(m.id, m.status === "hidden" ? "active" : "hidden")).then((ok) => ok && reload())}
-            >
-              {m.status === "hidden" ? "表示に戻す" : "非表示にする"}
-            </button>
+            {m.status === "pending" ? (
+              <Link className="text-button" to="/admin/inbox">
+                承認待ちで選ぶ
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => run(() => setMediaStatus(m.id, m.status === "hidden" ? "active" : "hidden")).then((ok) => ok && reload())}
+              >
+                {m.status === "hidden" ? "表示に戻す" : "非表示にする"}
+              </button>
+            )}
           </figure>
         ))}
       </div>
