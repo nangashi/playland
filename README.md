@@ -67,7 +67,8 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 
 - すべてのリクエスト（画面・API・写真）を Worker で認証してから返す（`assets.run_worker_first`）。
 - 本番は `AUTH_MODE=access`。Cloudflare Access の JWT を `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` で検証し、設定が欠けていれば拒否する。
-- `workers.dev` とプレビュー URL は無効化している（Access を迂回する経路を作らない）。
+- 公開 URL は `workers.dev`。Worker 単位の Access で保護し（workers.dev・プレビュー URL を含む）、プレビュー URL は無効にしている。
+- Worker でも、Access が渡す検証済みの情報（`ctx.access` の aud 一致）か、`Cf-Access-Jwt-Assertion` の JWT を検証する。
 - 親の編集はアプリ内 PIN で開始する 30 分のセッション（HttpOnly・Secure・SameSite=Strict の署名付き Cookie、Access の利用者に紐付け）。
   PIN の失敗は利用者ごと 5 回・全体 20 回／15 分で一時的に拒否する。`PARENT_PIN` / `ADMIN_SESSION_SECRET` が未設定なら管理機能は使えない。
 
@@ -82,10 +83,14 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
   座標のない候補は地図から消さず「ちずに だせない ○けん」と表示する。背景地図の設定は `src/web/map/tiles.ts` だけで差し替えられる。
 - 写真は実際のファイル内容で形式を判定し（JPEG・PNG・WebP、5MB まで）、`GET /media/:id` から認証後にだけ返す。
 
-## 本番へ出す前に必要なこと（未実施）
+## 本番
 
-- Cloudflare 上で D1 を作成し、`wrangler.jsonc` の `database_id` を設定
-- R2 バケット `playland-media` を作成（公開アクセス・r2.dev・カスタムドメインは有効にしない）
-- `wrangler secret put PARENT_PIN` / `wrangler secret put ADMIN_SESSION_SECRET`
-- Access アプリケーションを作成し、`ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` を設定
-- カスタムドメインを Access で保護し、未認証のアクセスが拒否されることを確認
+手順は [docs/production.md](docs/production.md)。workers.dev を Worker 単位の Cloudflare Access で保護し、ローカルのデータを `pnpm ops copy-to-production --confirm` で移す。
+
+```bash
+pnpm deploy                                   # vite build && wrangler deploy
+pnpm db:migrate:remote
+pnpm ops status  --target production
+pnpm ops backup  --target production          # .local/backups へ（家族の情報を含む。Git に置かない）
+pnpm ops restore <DIR> --target local --state <別の保存場所>   # 復元の確認
+```

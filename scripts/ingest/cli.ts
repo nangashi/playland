@@ -11,8 +11,9 @@
  *   pnpm ingest photos-fetch <photos.json> --target local           写真の候補を取得し確認ページを作る
  *   pnpm ingest photos-apply <photos.json> --target local --accept 1,3  採用した写真を保存
  *
- * 本番（production）・検証環境（staging）への書き込みは、収集用エージェントの実行環境と
- * 本番の認証情報を分ける方式を決めるまで無効にしている。
+ * --target production は wrangler login の認証で本番の D1・R2 に接続する。
+ * 本番への書き込み（apply / geocode --apply / photos-apply）には --confirm が必要。
+ * エージェントは preview の結果を親に見せ、承認を得てから --confirm を付ける。
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -23,6 +24,7 @@ import { applyBundle, previewBundle } from "../../src/ingest/apply";
 import { validateBundle, type BundleValidation } from "../../src/ingest/bundle";
 import { geocodePlaces, gsiGeocoder } from "../../src/ingest/geocode";
 import { loadKnown } from "../../src/ingest/known";
+import { openTarget, parseTarget, requireConfirm, UsageError, type TargetEnv } from "../lib/target";
 import { applyFetchedPhotos, fetchPhotos, readPhotoList } from "./photos";
 import { loadSources } from "./sources";
 
@@ -37,6 +39,7 @@ const { positionals, values } = parseArgs({
     out: { type: "string" },
     json: { type: "boolean", default: false },
     apply: { type: "boolean", default: false },
+    confirm: { type: "boolean", default: false },
   },
 });
 const [command, file] = positionals;
@@ -54,13 +57,13 @@ async function main(): Promise<number> {
     case "preview":
       return withDb((db) => preview(db, requireFile()));
     case "apply":
-      return withDb((db) => apply(db, requireFile()));
+      return withDb((db) => apply(db, requireFile()), "候補の登録");
     case "geocode":
-      return withDb((db) => geocode(db));
+      return withDb((db) => geocode(db), values.apply ? "座標の保存" : undefined);
     case "photos-fetch":
       return withDb((db) => photosFetch(db, requireFile()));
     case "photos-apply":
-      return withDb((db, env) => photosApply(db, env.MEDIA, requireFile()));
+      return withDb((db, env) => photosApply(db, env.MEDIA, requireFile()), "写真の保存");
     default:
       console.error(
         "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|photos-fetch|photos-apply> [file] --target local",
@@ -74,7 +77,6 @@ function requireFile(): string {
   return file;
 }
 
-class UsageError extends Error {}
 
 async function readBundle(path: string): Promise<{ raw: unknown; hash: string }> {
   const info = await stat(path);
@@ -160,7 +162,7 @@ async function apply(db: D1Database, path: string): Promise<number> {
     return 1;
   }
   const accept = parseAccept();
-  const result = await applyBundle(db, raw, { target: values.target!, inputHash: hash, accept });
+  const result = await applyBundle(db, raw, { target: parseTarget(values.target), inputHash: hash, accept });
   if (values.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -250,22 +252,19 @@ async function checkSources(): Promise<number> {
   return 0;
 }
 
-async function withDb(run: (db: D1Database, env: { DB: D1Database; MEDIA: R2Bucket }) => Promise<number>): Promise<number> {
-  const target = values.target;
-  if (target !== "local") {
-    throw new UsageError(
-      target === "staging" || target === "production"
-        ? `--target ${target} はまだ有効にしていません。収集用の環境と本番の認証情報を分ける接続方式を決めてから追加します。`
-        : "--target local を指定してください",
-    );
-  }
-  const { getPlatformProxy } = await import("wrangler");
-  // wrangler dev / wrangler d1 --local と同じローカルの D1 を使う
-  const proxy = await getPlatformProxy<{ DB: D1Database; MEDIA: R2Bucket }>({ configPath: "wrangler.jsonc", persist: true });
+/** 対象の DB を開いて実行する。書き込みを伴う操作は writeAction を渡す（本番では --confirm 必須） */
+async function withDb(
+  run: (db: D1Database, env: TargetEnv) => Promise<number>,
+  writeAction?: string,
+): Promise<number> {
+  const target = parseTarget(values.target);
+  if (writeAction) requireConfirm(target, values.confirm, writeAction);
+  const opened = await openTarget(target);
+  if (target === "production") console.log("※ 本番（production）の D1・R2 に接続しています");
   try {
-    return await run(proxy.env.DB, proxy.env);
+    return await run(opened.env.DB, opened.env);
   } finally {
-    await proxy.dispose();
+    await opened.dispose();
   }
 }
 

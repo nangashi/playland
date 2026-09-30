@@ -34,6 +34,14 @@ export function requireFamily(): MiddlewareHandler<AppEnv> {
         console.error("Cloudflare Access is not configured");
         return deny(c, 503);
       }
+      // Worker 単位の Access が検証済みの情報を渡した場合はそれを使う（aud が一致するものだけ）。
+      // 静的アセットを使う構成では渡されないことがあるため、その場合は JWT を自前で検証する。
+      const platform = accessContext(c);
+      if (platform && platform.aud === aud) {
+        const identity = await platform.getIdentity().catch(() => undefined);
+        c.set("identity", { email: identity?.email ?? null, mock: false });
+        return next();
+      }
       const token = c.req.header("cf-access-jwt-assertion");
       if (!token) return deny(c, 401);
       try {
@@ -53,6 +61,15 @@ export function requireFamily(): MiddlewareHandler<AppEnv> {
     console.error("Unknown AUTH_MODE");
     return deny(c, 503);
   };
+}
+
+function accessContext(c: Parameters<MiddlewareHandler<AppEnv>>[0]): CloudflareAccessContext | undefined {
+  try {
+    return (c.executionCtx as ExecutionContext).access;
+  } catch {
+    // ExecutionContext がない呼び出し（テスト等）
+    return undefined;
+  }
 }
 
 function jwks(teamDomain: string) {
