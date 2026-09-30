@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
 import type { ItemDetailResponse } from "../../domain/api";
 import {
-  ageRuleText,
   guardianLabel,
   mediaKindLabel,
   modeLabel,
@@ -130,31 +129,10 @@ export function ItemPage() {
             <dt>雨の日</dt>
             <dd className={`rain-${item.rain_policy}`}>{rainLabel[item.rain_policy]}</dd>
 
-            <dt>対象</dt>
+            <dt>同伴</dt>
             <dd>
-              {ageRuleText(
-                item.eligibility.age_min_kind,
-                item.eligibility.age_min,
-                item.eligibility.age_max_kind,
-                item.eligibility.age_max,
-              )}
-              <div className="muted">
-                {guardianLabel[item.eligibility.guardian_rule]}／{siblingLabel[item.eligibility.sibling_rule]}
-              </div>
-              {item.eligibility.eligibility_raw_text && (
-                <div className="raw-text">原文：{item.eligibility.eligibility_raw_text}</div>
-              )}
+              {guardianLabel[item.eligibility.guardian_rule]}／{siblingLabel[item.eligibility.sibling_rule]}
             </dd>
-
-            {(item.recommended_age_min !== null || item.recommended_age_max !== null) && (
-              <>
-                <dt>目安</dt>
-                <dd>
-                  {item.recommended_age_min ?? "?"}〜{item.recommended_age_max ?? "?"}歳くらい
-                  <span className="muted">（楽しめそうな年齢。参加資格ではありません）</span>
-                </dd>
-              </>
-            )}
 
             <dt>予約</dt>
             <dd>

@@ -62,7 +62,9 @@ describe("GET /api/items/:id", () => {
   it("場所・参加条件・保存状態を含む詳細を返す", async () => {
     const body: ItemDetailResponse = await (await get("/api/items/it-woodshop-spot")).json();
     expect(body.place).toMatchObject({ id: "pl-sample-woodshop", position_accuracy: "exact" });
-    expect(body.eligibility).toMatchObject({ age_min_kind: "value", age_min: 6, guardian_rule: "required" });
+    expect(body.eligibility).toEqual({ guardian_rule: "required", sibling_rule: body.eligibility.sibling_rule });
+    // 年齢の条件は画面に出さない
+    expect(body).not.toHaveProperty("recommended_age_min");
     expect(body).toMatchObject({ reservation_requirement: "required", saved: false });
   });
 

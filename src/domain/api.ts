@@ -104,18 +104,7 @@ export interface MediaInfo extends MediaRef {
 export interface ItemDetailResponse extends Omit<ItemCard, "place"> {
   official_url: string | null;
   place: PlaceDetail | null;
-  eligibility: Pick<
-    ItemRecord,
-    | "age_min_kind"
-    | "age_min"
-    | "age_max_kind"
-    | "age_max"
-    | "eligibility_raw_text"
-    | "guardian_rule"
-    | "sibling_rule"
-  >;
-  recommended_age_min: number | null;
-  recommended_age_max: number | null;
+  eligibility: Pick<ItemRecord, "guardian_rule" | "sibling_rule">;
   reservation_note: string | null;
   price_text: string | null;
   media: MediaInfo[];

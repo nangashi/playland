@@ -773,14 +773,6 @@ button.link-button {
 .rain-ok { color: var(--ok); }
 .rain-conditional { color: var(--warn); }
 
-.raw-text {
-  margin-top: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--surface-2);
-  font-size: 12px;
-}
-
 .travel-table {
   width: 100%;
   border-collapse: collapse;
