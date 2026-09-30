@@ -99,10 +99,11 @@ publicApi.get("/items/:id", async (c) => {
   const item = await getListedItem(db, id.data);
   if (!item) return notFound(c);
 
-  const [place, tags, saved, preferences, estimates, settings, media] = await Promise.all([
+  const [place, tags, saved, hidden, preferences, estimates, settings, media] = await Promise.all([
     item.place_id ? repo.getPlace(db, item.place_id) : null,
     repo.listItemTags(db, item.id),
     repo.isBookmarked(db, item.id),
+    repo.isHidden(db, item.id),
     item.place_id ? repo.listTransportPreferences(db, item.place_id) : [],
     item.place_id ? repo.listTravelEstimates(db, item.place_id) : [],
     repo.getSettings(db),
@@ -112,6 +113,7 @@ publicApi.get("/items/:id", async (c) => {
     item,
     tag_ids: tags.map((t) => t.tag_id).sort(),
     saved,
+    hidden,
     unknown: [],
     travel: item.place_id ? buildModeViews(item.place_id, preferences, estimates, settings) : null,
     matched_modes: null,
@@ -169,6 +171,22 @@ publicApi.delete("/bookmarks/:itemId", async (c) => {
   return c.body(null, 204);
 });
 
+/** 家族で「興味なし」にする（検索で「興味なしも表示」を選んだときだけ出る） */
+publicApi.put("/hidden/:itemId", async (c) => {
+  const itemId = idSchema.safeParse(c.req.param("itemId"));
+  if (!itemId.success) return notFound(c);
+  if (!(await getListedItem(c.env.DB, itemId.data))) return notFound(c);
+  await repo.addHidden(c.env.DB, itemId.data, new Date().toISOString());
+  return c.body(null, 204);
+});
+
+publicApi.delete("/hidden/:itemId", async (c) => {
+  const itemId = idSchema.safeParse(c.req.param("itemId"));
+  if (!itemId.success) return notFound(c);
+  await repo.removeHidden(c.env.DB, itemId.data);
+  return c.body(null, 204);
+});
+
 /** 一覧に載る候補（公開中の常設スポット。イベントは次のフェーズまで対象外） */
 async function getListedItem(db: D1Database, id: string): Promise<ItemRecord | null> {
   const item = await repo.getPublishedItem(db, id);
@@ -176,15 +194,16 @@ async function getListedItem(db: D1Database, id: string): Promise<ItemRecord | n
 }
 
 export async function loadSearchData(db: D1Database): Promise<SearchData> {
-  const [items, itemTags, bookmarks, preferences, estimates, settings] = await Promise.all([
+  const [items, itemTags, bookmarks, hidden, preferences, estimates, settings] = await Promise.all([
     repo.listPublishedItems(db),
     repo.listItemTags(db),
     repo.listBookmarks(db),
+    repo.listHidden(db),
     repo.listTransportPreferences(db),
     repo.listTravelEstimates(db),
     repo.getSettings(db),
   ]);
-  return { items, itemTags, bookmarks, preferences, estimates, settings };
+  return { items, itemTags, bookmarks, hidden, preferences, estimates, settings };
 }
 
 interface CoverIndex {
@@ -215,6 +234,7 @@ function toCard(entry: SearchEntry, places: Map<string, PlaceRecord>, covers: Co
     place: place ? { id: place.id, name: place.name } : null,
     tag_ids: entry.tag_ids,
     saved: entry.saved,
+    hidden: entry.hidden,
     unknown: entry.unknown,
     travel: entry.travel,
     matched_modes: entry.matched_modes,

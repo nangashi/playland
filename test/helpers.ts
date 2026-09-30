@@ -16,6 +16,7 @@ export async function seed() {
     "event_occurrences",
     "item_tags",
     "bookmarks",
+    "hidden_items",
     "items",
     "places",
   ].map((t) => `DELETE FROM ${t}`);

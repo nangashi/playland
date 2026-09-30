@@ -15,6 +15,7 @@ import { googleMapsDirectionsUrl, googleMapsSearchUrl, safeExternalUrl } from ".
 import { getTag } from "../../domain/tags";
 import type { ModeView } from "../../domain/transport";
 import { fetchAdminSession, fetchItem } from "../api";
+import { HideButton } from "../components/HideButton";
 import { Photo } from "../components/Photo";
 import { SaveButton } from "../components/SaveButton";
 
@@ -30,7 +31,11 @@ export function ItemPage() {
   const { item, isParent } = useLoaderData<typeof itemLoader>();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(item.saved);
-  useEffect(() => setSaved(item.saved), [item]);
+  const [hidden, setHiddenState] = useState(item.hidden);
+  useEffect(() => {
+    setSaved(item.saved);
+    setHiddenState(item.hidden);
+  }, [item]);
 
   const officialUrl = safeExternalUrl(item.official_url);
   const place = item.place;
@@ -67,8 +72,12 @@ export function ItemPage() {
         <div className="detail-main">
           <header className="detail-head">
             <h1 className="detail-title">{item.title}</h1>
-            <SaveButton itemId={item.id} saved={saved} onChange={setSaved} variant="full" />
+            <span className="detail-actions">
+              <SaveButton itemId={item.id} saved={saved} onChange={setSaved} variant="full" />
+              <HideButton itemId={item.id} hidden={hidden} onChange={setHiddenState} variant="full" />
+            </span>
           </header>
+          {hidden && <p className="muted">興味なしにしています。一覧には「興味なしも表示」を選んだときだけ出ます。</p>}
           {place && place.name !== item.title && <p className="muted">{place.name}</p>}
           {item.child_description && <p className="detail-desc">{item.child_description}</p>}
           {tags.length > 0 && (

@@ -41,9 +41,21 @@ export function planCandidate(
     const p = candidate.place;
     stmts.push({
       sql: `INSERT INTO places (id, name, address_text, latitude, longitude, position_accuracy,
-                                google_maps_url, initialized_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [placeId, place.name, p.address_text, p.latitude, p.longitude, p.position_accuracy, p.google_maps_url, now, now, now],
+                                position_source, google_maps_url, initialized_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        placeId,
+        place.name,
+        p.address_text,
+        p.latitude,
+        p.longitude,
+        p.position_accuracy,
+        p.latitude !== null ? p.position_source : null,
+        p.google_maps_url,
+        now,
+        now,
+        now,
+      ],
     });
   }
 

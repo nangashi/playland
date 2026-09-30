@@ -19,7 +19,7 @@ description: 家族向けお出かけ発見アプリ（playland）の候補（�
 - 座標・Google の Place ID を生成しない。元ページに座標が書かれている場合だけ `position_source: "source_page"` で入れる。
 - 根拠（evidence）は元ページの **短い引用**（300 文字以内）。記事を全文転載しない。
 - 登録（`apply`）は **親が preview の結果を確認して承認してから**。承認なしに実行しない。`--target production` は使わない（まだ無効）。
-- 画像はダウンロードしない。候補の URL を `image_candidates` に書くだけ（利用条件の確認と保存は親が管理画面で行う）。
+- 画像を自分でダウンロード・保存しない。写真は「写真リスト」に候補を書き、固定のコマンドで取得・親の確認・保存を行う（下の「写真」）。
 
 ## 手順
 
@@ -97,7 +97,37 @@ pnpm ingest apply .local/ingest/<batch_id>.json --target local [--accept 1,3]
 - 登録済み（同じ出典キー）の候補は変更されない。親の修正も上書きされない。
 - 失敗した候補があれば、原因を直して同じコマンドを再実行する（登録済みはスキップされる）。
 
-### 8. 報告する
+### 8. 座標を取得する
+
+```bash
+pnpm ingest geocode --target local          # 確認（国土地理院 住所検索の結果を表示）
+pnpm ingest geocode --target local --apply  # 保存（位置は「おおよそ」）
+```
+
+住所があり、座標がなく、親が座標を指定していない場所だけが対象。検索結果の住所が問い合わせの先頭と合わないものは採用しない。
+住所が分からない場所は、施設の公式のアクセスページで住所を確認して、親の了承を得て管理画面（または管理 API）で登録してから実行する。
+
+### 9. 写真の候補を挙げる
+
+家族内の私的な利用として、出典を記録して保存する方針。施設の外観や、遊び・体験の特徴が分かる写真を選ぶ。
+
+1. 各施設の公式ページから、ページ上にある画像 URL だけを挙げる（推測しない）。ロゴ・アイコン・地図・文字だけの画像・告知バナーは除く。
+2. `.local/ingest/photos-<番号>.json` に書く（形式は `src/ingest/photos.ts` の `photoListSchema`）。
+   `kind` は venue（施設の外観・設備）／past_event（過去のワークショップ等の様子）／image（イメージ）。`credit` は掲載元、`caption` は写っているもの。
+3. 取得して確認ページを作る（固定コードが https・内部アドレス拒否・5MB・画像形式を検査する）:
+
+   ```bash
+   pnpm ingest photos-fetch .local/ingest/photos-<番号>.json --target local
+   ```
+
+4. 親が `.local/ingest/photos/<batch>/review.html` を見て、採用する番号を決める。**ここで止まって承認を待つ。**
+5. 承認された番号だけを保存する:
+
+   ```bash
+   pnpm ingest photos-apply .local/ingest/photos-<番号>.json --target local --accept 0,3,5
+   ```
+
+### 10. 報告する
 
 登録した件数、スキップした件数と理由、タグの提案、見つけた良い収集元（`config/sources.yaml` への追加案）を親に伝える。
 `config/sources.yaml` の変更は親の了承を得てから行う。

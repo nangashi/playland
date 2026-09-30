@@ -21,6 +21,7 @@ import type {
   AdminSessionResponse,
   AdminSettingsResponse,
 } from "../domain/api";
+import { sha256Hex, sniffImageType } from "../domain/image";
 import { idSchema } from "../domain/model";
 import { endSession, identityKey, readSession, requireParent, verifyPinAndStartSession } from "./parent";
 import * as repo from "./repo";
@@ -222,6 +223,10 @@ adminApi.patch("/places/:id", async (c) => {
       values.push(patch[col]);
     }
   }
+  // 親が座標を指定・消去したら、以後の住所検索で上書きしない
+  if (patch.latitude !== undefined) {
+    sets.push("position_source = 'parent'", "position_note = NULL");
+  }
   const guard = `EXISTS (SELECT 1 FROM places WHERE id = ? AND version = ?)`;
   const changed = Object.keys(input).filter((k) => k !== "version");
   const stmts = [
@@ -379,27 +384,6 @@ adminApi.patch("/settings", async (c) => {
 
 // ---- 写真 ----
 
-const IMAGE_SIGNATURES: { type: "image/jpeg" | "image/png" | "image/webp"; test: (b: Uint8Array) => boolean }[] = [
-  { type: "image/jpeg", test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  {
-    type: "image/png",
-    test: (b) => [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((v, i) => b[i] === v),
-  },
-  {
-    type: "image/webp",
-    test: (b) => ascii(b, 0, 4) === "RIFF" && ascii(b, 8, 12) === "WEBP",
-  },
-];
-
-function ascii(b: Uint8Array, from: number, to: number) {
-  return String.fromCharCode(...b.slice(from, to));
-}
-
-/** 実際のファイル内容から形式を判定する（申告された Content-Type は信用しない） */
-export function sniffImageType(bytes: Uint8Array) {
-  return IMAGE_SIGNATURES.find((s) => s.test(bytes))?.type ?? null;
-}
-
 adminApi.post("/media", async (c) => {
   let form: FormData;
   try {
@@ -430,9 +414,7 @@ adminApi.post("/media", async (c) => {
 
   const id = crypto.randomUUID();
   const key = `media/${id}`;
-  const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const sha256 = await sha256Hex(bytes);
   const now = new Date().toISOString();
   const actor = actorOf(c);
 

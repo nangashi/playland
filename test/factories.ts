@@ -75,6 +75,7 @@ export function data(overrides: Partial<SearchData> = {}): SearchData {
     items: [],
     itemTags: [],
     bookmarks: [],
+    hidden: [],
     preferences: [],
     estimates: [],
     settings: { origin_version: 1, bicycle_max_minutes: 20 },

@@ -395,10 +395,61 @@ a {
   color: var(--warn);
 }
 
-.card-save {
+.card-actions {
   position: absolute;
   top: 4px;
   right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card.is-hidden .card-link {
+  opacity: 0.55;
+}
+
+.tag-muted {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.hide-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.save-icon .hide-button {
+  width: 36px;
+  height: 32px;
+  font-size: 17px;
+  border-radius: 6px;
+}
+
+.save-icon .hide-button:hover {
+  background: var(--surface-2);
+}
+
+.save-full .hide-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ---- 保存 ---- */

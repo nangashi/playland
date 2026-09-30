@@ -31,3 +31,9 @@ sources:
     urls:
       - https://example.com/library/news
     images: none
+
+  - id: official-site
+    name: 各施設の公式サイト
+    kind: facility
+    images: review
+    notes: 施設ごとの公式ページ（URL は候補ごとに記録）。料金・対象・予約は公式ページの記載を根拠にする

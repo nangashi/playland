@@ -71,6 +71,11 @@ export function setBookmark(itemId: string, saved: boolean) {
   return request<void>(`/api/bookmarks/${encodeURIComponent(itemId)}`, { method: saved ? "PUT" : "DELETE" });
 }
 
+/** 家族で「興味なし」にする／戻す */
+export function setHidden(itemId: string, hidden: boolean) {
+  return request<void>(`/api/hidden/${encodeURIComponent(itemId)}`, { method: hidden ? "PUT" : "DELETE" });
+}
+
 // ---- 親 ----
 
 export function fetchAdminSession(signal?: AbortSignal) {

@@ -44,7 +44,14 @@ pnpm ingest export-known --target local              # 照合用の既存デー�
 pnpm ingest validate .local/ingest/<batch>.json      # 形式・根拠・整合（DB を見ない）
 pnpm ingest preview  .local/ingest/<batch>.json --target local
 pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3]
+pnpm ingest geocode --target local [--apply]         # 住所から座標（国土地理院 住所検索・おおよその位置）
+pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真候補を取得し確認ページを作る
+pnpm ingest photos-apply .local/ingest/<photos>.json --target local --accept 0,3
 ```
+
+- 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に保存する。親が確認ページで採用したものだけを保存する。
+- 画像の取得は https のみ・内部アドレス拒否（名前解決後に確認）・リダイレクト先も再検査・5MB まで・実際の内容で形式を判定。
+- 座標は、住所があり座標がなく親が指定していない場所だけを埋める。親が地図で直した位置は上書きしない。
 
 - 取り込みは新しい候補を INSERT するだけで、既存の候補・場所・親の修正・お気に入り・家族設定を変更しない（テストで確認）。
 - 同じ出典キー（`source_id` + `source_key`）は登録済みとしてスキップ。タイトルや場所名だけの一致は要確認にする。
@@ -70,6 +77,7 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 - 親の編集は版番号付き。古い版での保存は 409 で拒否し、何も書き換えない。
 - 所要時間は出発地の版・手段・取得元（manual / api）ごとに保存し、親の値を優先する。出発地を変えると古い値は使わない。
 - 絞り込みは「カテゴリ（1 つ選ぶ。含まれるタグのどれかに当てはまれば一致）」と「条件（保存済み・雨の日でも遊べる・年齢・移動）」の 2 段。
+- 家族で「興味なし」にした候補は、「興味なしも表示」を選んだときだけ一覧・地図に出る。
 - 地図は一覧と同じ検索条件・検索関数を使い（`GET /api/map-items`、ページ分割なし・最大 500 か所）、同じ場所の候補を 1 つのマーカーにまとめる。
   座標のない候補は地図から消さず「ちずに だせない ○けん」と表示する。背景地図の設定は `src/web/map/tiles.ts` だけで差し替えられる。
 - 写真は実際のファイル内容で形式を判定し（JPEG・PNG・WebP、5MB まで）、`GET /media/:id` から認証後にだけ返す。

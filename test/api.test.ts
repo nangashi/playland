@@ -110,3 +110,30 @@ describe("家族の保存", () => {
     expect(saved.items.find((i) => i.id === "it-science-spot")?.title).toBe("新しい名前");
   });
 });
+
+describe("家族の「興味なし」", () => {
+  const path = "/api/hidden/it-gym-spot";
+
+  it("興味なしにすると一覧・地図から消え、「興味なしも表示」で印付きで出る", async () => {
+    expect((await send("PUT", path)).status).toBe(204);
+    expect((await send("PUT", path)).status).toBe(204);
+    expect((await list()).items.map((i) => i.id)).not.toContain("it-gym-spot");
+    const withHidden = await list("?include_hidden=true");
+    expect(withHidden.items.at(-1)).toMatchObject({ id: "it-gym-spot", hidden: true });
+    const map = await (await get("/api/map-items")).json<{ total: number }>();
+    expect(map.total).toBe(6);
+    const detail: ItemDetailResponse = await (await get("/api/items/it-gym-spot")).json();
+    expect(detail.hidden).toBe(true);
+  });
+
+  it("取り消せる。存在しなくても成功", async () => {
+    await send("PUT", path);
+    expect((await send("DELETE", path)).status).toBe(204);
+    expect((await send("DELETE", path)).status).toBe(204);
+    expect((await list()).items.map((i) => i.id)).toContain("it-gym-spot");
+  });
+
+  it("別オリジンからは変更できない（CSRF）", async () => {
+    expect((await send("PUT", path, { Origin: "https://evil.example" })).status).toBe(403);
+  });
+});

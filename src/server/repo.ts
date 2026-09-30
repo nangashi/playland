@@ -1,6 +1,7 @@
 import type {
   BookmarkRecord,
   FamilySettingsRecord,
+  HiddenRecord,
   ItemRecord,
   ItemTagRecord,
   MediaRecord,
@@ -21,7 +22,7 @@ export const ITEM_COLUMNS = `id, kind, place_id, title, child_description, rain_
   price_status, price_text, initialized_at, parent_reviewed_at, version, created_at, updated_at`;
 
 const PLACE_COLUMNS = `id, name, address_text, latitude, longitude, position_accuracy,
-  google_place_id, google_maps_url, version`;
+  google_place_id, google_maps_url, position_source, position_note, version`;
 
 const MEDIA_COLUMNS = `id, r2_key, item_id, place_id, kind, source_url, credit, license_note,
   content_type, byte_size, status, sort_order, created_at`;
@@ -143,4 +144,28 @@ export async function addBookmark(db: D1Database, itemId: string, now: string) {
 /** 存在しなくても成功扱い（冪等） */
 export async function removeBookmark(db: D1Database, itemId: string) {
   await db.prepare(`DELETE FROM bookmarks WHERE item_id = ?`).bind(itemId).run();
+}
+
+// ---- 家族の「興味なし」 ----
+
+export async function listHidden(db: D1Database): Promise<HiddenRecord[]> {
+  const { results } = await db.prepare(`SELECT item_id, created_at FROM hidden_items`).all<HiddenRecord>();
+  return results;
+}
+
+export async function isHidden(db: D1Database, itemId: string): Promise<boolean> {
+  return (await db.prepare(`SELECT 1 AS ok FROM hidden_items WHERE item_id = ?`).bind(itemId).first()) !== null;
+}
+
+/** 何度呼んでも 1 件だけ残る（冪等） */
+export async function addHidden(db: D1Database, itemId: string, now: string) {
+  await db
+    .prepare(`INSERT INTO hidden_items (item_id, created_at) VALUES (?, ?) ON CONFLICT (item_id) DO NOTHING`)
+    .bind(itemId, now)
+    .run();
+}
+
+/** 存在しなくても成功扱い（冪等） */
+export async function removeHidden(db: D1Database, itemId: string) {
+  await db.prepare(`DELETE FROM hidden_items WHERE item_id = ?`).bind(itemId).run();
 }

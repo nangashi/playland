@@ -11,6 +11,7 @@ interface Props {
   /** 表示位置を覚えておくためのキー（検索条件ごと） */
   viewKey: string;
   onSavedChange: (itemId: string, saved: boolean) => void;
+  onHiddenChange: (itemId: string, hidden: boolean) => void;
 }
 
 /** 近すぎる別々の会場をまとめる半径（px） */
@@ -46,7 +47,7 @@ function saveView(key: string, view: SavedView) {
  * - 画面上で近すぎる別々の場所は、形の違う「まとまり」マーカーにし、押すと拡大する
  * - 選んだマーカーの候補は画面下のカードで見る
  */
-export function MapView({ venues, viewKey, onSavedChange }: Props) {
+export function MapView({ venues, viewKey, onSavedChange, onHiddenChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -183,7 +184,7 @@ export function MapView({ venues, viewKey, onSavedChange }: Props) {
               )}
               <div className="map-sheet-cards">
                 {v.items.map((item: ItemCardData) => (
-                  <ItemCard key={item.id} item={item} onSavedChange={onSavedChange} />
+                  <ItemCard key={item.id} item={item} onSavedChange={onSavedChange} onHiddenChange={onHiddenChange} />
                 ))}
               </div>
             </div>

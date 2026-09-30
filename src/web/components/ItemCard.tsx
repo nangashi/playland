@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import type { ItemCard as ItemCardData } from "../../domain/api";
 import { rainLabel, unknownReasonLabel } from "../../domain/labels";
+import { HideButton } from "./HideButton";
 import { Photo } from "./Photo";
 import { SaveButton } from "./SaveButton";
 import { TravelSummary } from "./TravelSummary";
@@ -8,10 +9,11 @@ import { TravelSummary } from "./TravelSummary";
 interface Props {
   item: ItemCardData;
   onSavedChange: (itemId: string, saved: boolean) => void;
+  onHiddenChange: (itemId: string, hidden: boolean) => void;
 }
 
 /** 一覧のカード（横長・高密度）。細かな条件は詳細へ */
-export function ItemCard({ item, onSavedChange }: Props) {
+export function ItemCard({ item, onSavedChange, onHiddenChange }: Props) {
   const facts = [
     item.rain_policy === "ok" ? { text: rainLabel.ok, tone: "ok" } : null,
     item.reservation_requirement === "required" ? { text: "要予約", tone: "warn" } : null,
@@ -20,7 +22,7 @@ export function ItemCard({ item, onSavedChange }: Props) {
   ].filter((f): f is { text: string; tone: string } => f !== null);
 
   return (
-    <article className="card">
+    <article className={item.hidden ? "card is-hidden" : "card"}>
       <Link to={`/items/${encodeURIComponent(item.id)}`} className="card-link">
         <div className="card-thumb">
           <Photo media={item.cover} alt="" showKind={false} />
@@ -30,6 +32,7 @@ export function ItemCard({ item, onSavedChange }: Props) {
           {item.place && item.place.name !== item.title && <p className="card-place">{item.place.name}</p>}
           {item.child_description && <p className="card-desc">{item.child_description}</p>}
           <p className="card-meta">
+            {item.hidden && <span className="tag tag-muted">興味なし</span>}
             {facts.map((f) => (
               <span key={f.text} className={`tag tag-${f.tone}`}>
                 {f.text}
@@ -42,8 +45,9 @@ export function ItemCard({ item, onSavedChange }: Props) {
           )}
         </div>
       </Link>
-      <div className="card-save">
+      <div className="card-actions">
         <SaveButton itemId={item.id} saved={item.saved} onChange={(next) => onSavedChange(item.id, next)} />
+        <HideButton itemId={item.id} hidden={item.hidden} onChange={(next) => onHiddenChange(item.id, next)} />
       </div>
     </article>
   );

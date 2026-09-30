@@ -25,6 +25,7 @@ export const TAGS: readonly TagDefinition[] = [
   { id: "sports_facility", category: "facility", label: "スポーツ施設" },
   { id: "workshop_studio", category: "facility", label: "工房・教室" },
   { id: "community_center", category: "facility", label: "公民館・地域施設" },
+  { id: "character_theme", category: "facility", label: "キャラクター・テーマ施設" },
 
   // 体験
   { id: "crafting", category: "experience", label: "工作" },
@@ -47,6 +48,7 @@ export const TAGS: readonly TagDefinition[] = [
   { id: "music", category: "experience", label: "音楽" },
   { id: "reading", category: "experience", label: "読み聞かせ・本" },
   { id: "vehicles", category: "experience", label: "乗りもの" },
+  { id: "job_experience", category: "experience", label: "職業体験" },
 ];
 
 /**
@@ -75,6 +77,7 @@ export const CATEGORIES: readonly CategoryDefinition[] = [
     tagIds: ["athletic", "climbing", "ball_sports", "water_play", "hiking", "sports_facility", "indoor_playground"],
   },
   { id: "music-books", label: "音楽・絵本", tagIds: ["music", "reading"] },
+  { id: "theme", label: "テーマ施設・体験", tagIds: ["character_theme", "job_experience"] },
 ];
 
 const tagById = new Map(TAGS.map((t) => [t.id, t]));

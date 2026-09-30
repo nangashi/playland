@@ -184,6 +184,8 @@ describe("場所と移動の編集", () => {
     expect(res.status).toBe(200);
     const body: AdminPlaceResponse = await (await get("/api/admin/places/pl-sample-park", { headers })).json();
     expect(body.place).toMatchObject({ latitude: null, position_accuracy: "unknown", version: 2 });
+    // 親が消した座標は、住所検索で埋め直さない
+    expect(body.place.position_source).toBe("parent");
   });
 
   it("手段の表示と親の目安を変更でき、一覧に反映される（A08・A09）", async () => {

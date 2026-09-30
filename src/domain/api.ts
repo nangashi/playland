@@ -35,6 +35,8 @@ export interface ItemCard {
   tag_ids: string[];
   /** 家族で保存済み */
   saved: boolean;
+  /** 家族で「興味なし」にした */
+  hidden: boolean;
   /** 不明のまま含めた条件 */
   unknown: UnknownReason[];
   /** 場所不明なら null */

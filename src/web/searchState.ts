@@ -18,6 +18,8 @@ export interface SearchState {
   modes: TransportMode[];
   maxMinutes: number | null;
   includeUnknown: boolean;
+  /** 家族で「興味なし」にしたものも表示する */
+  includeHidden: boolean;
   pages: number;
 }
 
@@ -44,6 +46,7 @@ export function readSearchState(params: URLSearchParams): SearchState {
     modes: list("modes").filter((m): m is TransportMode => (transportModes as readonly string[]).includes(m)),
     maxMinutes: max !== null && max > 0 ? max : null,
     includeUnknown: params.get("unknown") === "1",
+    includeHidden: params.get("hidden") === "1",
     pages: Math.min(Math.max(pages, 1), MAX_PAGES),
   };
 }
@@ -58,6 +61,7 @@ export function writeSearchState(state: SearchState): URLSearchParams {
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max", String(state.maxMinutes));
   if (state.includeUnknown) p.set("unknown", "1");
+  if (state.includeHidden) p.set("hidden", "1");
   if (state.view === "list" && state.pages > 1) p.set("pages", String(state.pages));
   return p;
 }
@@ -68,6 +72,7 @@ export function toApiParams(state: SearchState, page: number): URLSearchParams {
     saved: String(state.saved),
     rain: state.rainOk ? "ok" : "any",
     include_unknown: String(state.includeUnknown),
+    include_hidden: String(state.includeHidden),
     limit: String(DEFAULT_PAGE_SIZE),
     offset: String(page * DEFAULT_PAGE_SIZE),
   });
@@ -118,4 +123,5 @@ export const CLEARED: Partial<SearchState> = {
   modes: [],
   maxMinutes: null,
   includeUnknown: false,
+  includeHidden: false,
 };

@@ -53,18 +53,21 @@ export function SearchPage() {
     setSearchParams(writeSearchState(merged), { replace: options.keepPages, preventScrollReset: options.keepPages });
   }
 
-  // 保存を外しても、その場ではカードを消さない（押した場所から消えないように）
-  function onSavedChange(itemId: string, saved: boolean) {
-    const patch = (item: ItemCardData) => (item.id === itemId ? { ...item, saved } : item);
+  // 保存・興味なしを変えても、その場ではカードを消さない（押した場所から消えないように）
+  function patchItem(itemId: string, change: Partial<ItemCardData>) {
+    const patch = (item: ItemCardData) => (item.id === itemId ? { ...item, ...change } : item);
     setItems((current) => current.map(patch));
     setMap((current) =>
       current ? { ...current, venues: current.venues.map((v) => ({ ...v, items: v.items.map(patch) })) } : current,
     );
   }
+  const onSavedChange = (itemId: string, saved: boolean) => patchItem(itemId, { saved });
+  const onHiddenChange = (itemId: string, hidden: boolean) => patchItem(itemId, { hidden });
 
   const conditions = activeConditions(state);
   const hasMore = items.length < data.total && state.pages < MAX_PAGES;
-  const firstUnknown = items.findIndex((i) => i.unknown.length > 0);
+  const firstUnknown = items.findIndex((i) => !i.hidden && i.unknown.length > 0);
+  const firstHidden = items.findIndex((i) => i.hidden);
 
   return (
     <main className="page">
@@ -90,7 +93,15 @@ export function SearchPage() {
             />
             不明も表示
           </label>
-          {(conditions.length > 0 || state.includeUnknown) && (
+          <label className="inline-check" title="家族で「興味なし」にした候補も後ろに表示します">
+            <input
+              type="checkbox"
+              checked={state.includeHidden}
+              onChange={(e) => update({ includeHidden: e.target.checked })}
+            />
+            興味なしも表示
+          </label>
+          {(conditions.length > 0 || state.includeUnknown || state.includeHidden) && (
             <button type="button" className="text-button" onClick={() => update(CLEARED)}>
               条件をクリア
             </button>
@@ -123,7 +134,12 @@ export function SearchPage() {
           <MapNotes map={map} onShowList={() => update({ view: "list" })} />
           <MapBoundary onShowList={() => update({ view: "list" })}>
             <Suspense fallback={<div className="map map-loading">地図を読み込んでいます…</div>}>
-              <MapView venues={map.venues} viewKey={mapViewKey(state)} onSavedChange={onSavedChange} />
+              <MapView
+                venues={map.venues}
+                viewKey={mapViewKey(state)}
+                onSavedChange={onSavedChange}
+                onHiddenChange={onHiddenChange}
+              />
             </Suspense>
           </MapBoundary>
         </>
@@ -133,7 +149,8 @@ export function SearchPage() {
             {items.map((item, index) => (
               <div key={item.id} className="card-slot">
                 {index === firstUnknown && <h2 className="group-heading">条件に合うか不明な候補</h2>}
-                <ItemCard item={item} onSavedChange={onSavedChange} />
+                {index === firstHidden && <h2 className="group-heading">興味なしにした候補</h2>}
+                <ItemCard item={item} onSavedChange={onSavedChange} onHiddenChange={onHiddenChange} />
               </div>
             ))}
           </div>

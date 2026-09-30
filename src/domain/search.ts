@@ -3,6 +3,7 @@ import { ageFit, type Fit } from "./eligibility";
 import {
   transportModes,
   type BookmarkRecord,
+  type HiddenRecord,
   type ItemRecord,
   type ItemTagRecord,
   type TransportMode,
@@ -43,6 +44,8 @@ export const searchQuerySchema = z.object({
   modes: modesParam.optional(),
   max_minutes: z.coerce.number().int().min(1).max(600).optional(),
   include_unknown: boolParam.default(false),
+  /** 家族で「興味なし」にしたものも表示する */
+  include_hidden: boolParam.default(false),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -58,6 +61,7 @@ const QUERY_KEYS = [
   "modes",
   "max_minutes",
   "include_unknown",
+  "include_hidden",
   "limit",
   "offset",
 ] as const;
@@ -75,6 +79,7 @@ export interface SearchData {
   items: readonly ItemRecord[];
   itemTags: readonly ItemTagRecord[];
   bookmarks: readonly BookmarkRecord[];
+  hidden: readonly HiddenRecord[];
   preferences: readonly TransportPreferenceRecord[];
   estimates: readonly TravelEstimateRecord[];
   settings: TransportSettings;
@@ -84,6 +89,8 @@ export interface SearchEntry {
   item: ItemRecord;
   tag_ids: string[];
   saved: boolean;
+  /** 家族で「興味なし」にした（include_hidden のときだけ true のものが含まれる） */
+  hidden: boolean;
   /** 不明のまま含めた条件（include_unknown のときだけ空でない） */
   unknown: UnknownReason[];
   /** 場所不明なら null */
@@ -102,7 +109,8 @@ export interface SearchResult {
  * - イベント（開催日のある候補）は次のフェーズまで対象外
  * - 不明は一致としない。include_unknown のときだけ理由付きで後ろに並べる
  * - 既知の不一致（年齢制限外など）は include_unknown でも戻さない
- * - 並び順は固定（一致 → 不明あり、各グループ内は新着順・ID 順）
+ * - 「興味なし」は include_hidden のときだけ含める
+ * - 並び順は固定（一致 → 不明あり → 興味なし、各グループ内は新着順・ID 順）
  */
 export function searchItems(data: SearchData, query: SearchQuery): SearchResult {
   const entries = searchAllEntries(data, query);
@@ -115,6 +123,7 @@ export function searchItems(data: SearchData, query: SearchQuery): SearchResult 
 /** ページ分割せずに、条件に合うすべての候補を並び順どおりに返す（地図用） */
 export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEntry[] {
   const saved = new Set(data.bookmarks.map((b) => b.item_id));
+  const hidden = new Set(data.hidden.map((h) => h.item_id));
   const tagsByItem = groupBy(data.itemTags, (t) => t.item_id);
   const category = query.category ? getCategory(query.category) : undefined;
   const travelModes =
@@ -125,6 +134,8 @@ export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEn
     if (item.publish_status !== "published" || item.kind !== "spot") continue;
     const isSaved = saved.has(item.id);
     if (query.saved && !isSaved) continue;
+    const isHidden = hidden.has(item.id);
+    if (isHidden && !query.include_hidden) continue;
 
     const unknown: UnknownReason[] = [];
     const itemTagIds = (tagsByItem.get(item.id) ?? []).map((t) => t.tag_id);
@@ -160,6 +171,7 @@ export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEn
       item,
       tag_ids: itemTagIds.sort(),
       saved: isSaved,
+      hidden: isHidden,
       unknown,
       travel,
       matched_modes: matchedModes,
@@ -190,7 +202,7 @@ function categoryFit(item: ItemRecord, itemTagIds: ReadonlySet<string>, category
 }
 
 function compareEntries(a: SearchEntry, b: SearchEntry): number {
-  const rank = (e: SearchEntry) => (e.unknown.length > 0 ? 1 : 0);
+  const rank = (e: SearchEntry) => (e.hidden ? 2 : e.unknown.length > 0 ? 1 : 0);
   const byRank = rank(a) - rank(b);
   if (byRank !== 0) return byRank;
   if (a.item.created_at !== b.item.created_at) return a.item.created_at < b.item.created_at ? 1 : -1;

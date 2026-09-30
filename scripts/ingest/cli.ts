@@ -7,6 +7,9 @@
  *   pnpm ingest validate <bundle.json>                形式・根拠・整合の検証（DB を見ない）
  *   pnpm ingest preview  <bundle.json> --target local 新規・既存・要確認・エラーの一覧
  *   pnpm ingest apply    <bundle.json> --target local [--accept 1,3]
+ *   pnpm ingest geocode  --target local [--apply]      住所から座標を取得（国土地理院 住所検索）
+ *   pnpm ingest photos-fetch <photos.json> --target local           写真の候補を取得し確認ページを作る
+ *   pnpm ingest photos-apply <photos.json> --target local --accept 1,3  採用した写真を保存
  *
  * 本番（production）・検証環境（staging）への書き込みは、収集用エージェントの実行環境と
  * 本番の認証情報を分ける方式を決めるまで無効にしている。
@@ -18,7 +21,9 @@ import { parseArgs } from "node:util";
 import { CATEGORIES, TAGS } from "../../src/domain/tags";
 import { applyBundle, previewBundle } from "../../src/ingest/apply";
 import { validateBundle, type BundleValidation } from "../../src/ingest/bundle";
+import { geocodePlaces, gsiGeocoder } from "../../src/ingest/geocode";
 import { loadKnown } from "../../src/ingest/known";
+import { applyFetchedPhotos, fetchPhotos, readPhotoList } from "./photos";
 import { loadSources } from "./sources";
 
 const MAX_BUNDLE_BYTES = 5 * 1024 * 1024;
@@ -31,6 +36,7 @@ const { positionals, values } = parseArgs({
     accept: { type: "string" },
     out: { type: "string" },
     json: { type: "boolean", default: false },
+    apply: { type: "boolean", default: false },
   },
 });
 const [command, file] = positionals;
@@ -49,8 +55,16 @@ async function main(): Promise<number> {
       return withDb((db) => preview(db, requireFile()));
     case "apply":
       return withDb((db) => apply(db, requireFile()));
+    case "geocode":
+      return withDb((db) => geocode(db));
+    case "photos-fetch":
+      return withDb((db) => photosFetch(db, requireFile()));
+    case "photos-apply":
+      return withDb((db, env) => photosApply(db, env.MEDIA, requireFile()));
     default:
-      console.error("使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply> [bundle.json] --target local");
+      console.error(
+        "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|photos-fetch|photos-apply> [file] --target local",
+      );
       return 2;
   }
 }
@@ -145,12 +159,7 @@ async function apply(db: D1Database, path: string): Promise<number> {
     printValidation(v, sourceErrors);
     return 1;
   }
-  const accept = new Set(
-    (values.accept ?? "")
-      .split(",")
-      .filter((s) => s.trim() !== "")
-      .map((s) => Number.parseInt(s, 10)),
-  );
+  const accept = parseAccept();
   const result = await applyBundle(db, raw, { target: values.target!, inputHash: hash, accept });
   if (values.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -164,6 +173,53 @@ async function apply(db: D1Database, path: string): Promise<number> {
     if (result.status !== "completed") console.log("失敗した候補は、原因を直して同じコマンドを再実行すると登録されます（登録済みの候補はスキップ）。");
   }
   return result.status === "failed" ? 1 : 0;
+}
+
+function parseAccept(): Set<number> {
+  return new Set(
+    (values.accept ?? "")
+      .split(",")
+      .filter((s) => s.trim() !== "")
+      .map((s) => Number.parseInt(s, 10))
+      .filter((n) => Number.isInteger(n)),
+  );
+}
+
+async function geocode(db: D1Database): Promise<number> {
+  const outcomes = await geocodePlaces(db, gsiGeocoder(), { apply: values.apply, delayMs: 1000 });
+  if (outcomes.length === 0) {
+    console.log("座標を取得する対象の場所はありません（住所があり、座標がなく、親が指定していない場所が対象）");
+    return 0;
+  }
+  for (const o of outcomes) {
+    if (o.status === "found") {
+      console.log(`${o.applied ? "[保存]" : "[取得]"} ${o.name}  ${o.latitude}, ${o.longitude}  （一致: ${o.matched}）`);
+    } else {
+      console.log(`[${o.status === "error" ? "失敗" : "見つからない"}] ${o.name}  検索語: ${o.query}${o.error ? `  ${o.error}` : ""}`);
+    }
+  }
+  if (!values.apply) console.log("\n確認のみです。保存するには --apply を付けて再実行してください（位置は「おおよそ」として保存）。");
+  return 0;
+}
+
+async function photosFetch(db: D1Database, path: string): Promise<number> {
+  const list = await readPhotoList(path);
+  const { dir, manifest } = await fetchPhotos(db, list);
+  const ok = manifest.filter((m) => m.status === "ok").length;
+  console.log(`\n${ok} / ${manifest.length} 件を取得しました。${dir}/review.html を開いて、採用する番号を選んでください。`);
+  return 0;
+}
+
+async function photosApply(db: D1Database, bucket: R2Bucket, path: string): Promise<number> {
+  const accept = parseAccept();
+  if (accept.size === 0) throw new UsageError("採用する番号を --accept で指定してください");
+  const list = await readPhotoList(path);
+  const outcomes = await applyFetchedPhotos(db, bucket, list, accept);
+  const label = { saved: "保存", skipped_duplicate: "保存済みのため省略", skipped_not_accepted: "", error: "失敗" };
+  for (const o of outcomes.filter((o) => o.result !== "skipped_not_accepted")) {
+    console.log(`[${label[o.result]}] #${o.index}${o.reason ? `  ${o.reason}` : ""}`);
+  }
+  return outcomes.some((o) => o.result === "error") ? 1 : 0;
 }
 
 async function exportKnown(db: D1Database): Promise<number> {
@@ -194,7 +250,7 @@ async function checkSources(): Promise<number> {
   return 0;
 }
 
-async function withDb(run: (db: D1Database) => Promise<number>): Promise<number> {
+async function withDb(run: (db: D1Database, env: { DB: D1Database; MEDIA: R2Bucket }) => Promise<number>): Promise<number> {
   const target = values.target;
   if (target !== "local") {
     throw new UsageError(
@@ -205,9 +261,9 @@ async function withDb(run: (db: D1Database) => Promise<number>): Promise<number>
   }
   const { getPlatformProxy } = await import("wrangler");
   // wrangler dev / wrangler d1 --local と同じローカルの D1 を使う
-  const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: "wrangler.jsonc", persist: true });
+  const proxy = await getPlatformProxy<{ DB: D1Database; MEDIA: R2Bucket }>({ configPath: "wrangler.jsonc", persist: true });
   try {
-    return await run(proxy.env.DB);
+    return await run(proxy.env.DB, proxy.env);
   } finally {
     await proxy.dispose();
   }

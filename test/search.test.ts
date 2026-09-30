@@ -38,6 +38,29 @@ describe("公開状態・保存・並び順", () => {
   });
 });
 
+describe("興味なし", () => {
+  const d = data({
+    items: [
+      makeItem("a", { created_at: "2026-09-03T00:00:00.000Z" }),
+      makeItem("b", { created_at: "2026-09-02T00:00:00.000Z" }),
+      makeItem("c", { created_at: "2026-09-01T00:00:00.000Z" }),
+    ],
+    hidden: [{ item_id: "a", created_at: "2026-09-10T00:00:00.000Z" }],
+    bookmarks: [{ item_id: "a", created_at: "2026-09-10T00:00:00.000Z" }],
+  });
+
+  it("既定では出さず、保存済みでも出さない", () => {
+    expect(ids(searchItems(d, query()))).toEqual(["b", "c"]);
+    expect(ids(searchItems(d, query({ saved: "true" })))).toEqual([]);
+  });
+
+  it("「興味なしも表示」のときだけ、印を付けて最後に出す", () => {
+    const r = searchItems(d, query({ include_hidden: "true" }));
+    expect(ids(r)).toEqual(["b", "c", "a"]);
+    expect(r.entries.map((e) => e.hidden)).toEqual([false, false, true]);
+  });
+});
+
 describe("雨の日でも遊べる（A04）", () => {
   const d = data({
     items: [
@@ -198,7 +221,14 @@ describe("移動（A08・A09・A10）", () => {
 describe("parseSearchQuery", () => {
   it("既定値を補う", () => {
     const r = parseSearchQuery(new URLSearchParams(""));
-    expect(r.success && r.data).toEqual({ saved: false, rain: "any", include_unknown: false, limit: 30, offset: 0 });
+    expect(r.success && r.data).toEqual({
+      saved: false,
+      rain: "any",
+      include_unknown: false,
+      include_hidden: false,
+      limit: 30,
+      offset: 0,
+    });
   });
 
   it("未定義の値は拒否し、黙って既定値に置き換えない", () => {
@@ -209,6 +239,7 @@ describe("parseSearchQuery", () => {
       "category=not_a_category",
       "modes=plane",
       "include_unknown=yes",
+      "include_hidden=1",
       "rain=ok_or_conditional",
       "max_minutes=0",
     ]) {

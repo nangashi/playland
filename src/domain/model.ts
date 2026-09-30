@@ -85,6 +85,8 @@ export interface PlaceRecord {
   position_accuracy: PositionAccuracy;
   google_place_id: string | null;
   google_maps_url: string | null;
+  position_source: PositionSource | null;
+  position_note: string | null;
   version: number;
 }
 
@@ -135,6 +137,15 @@ export interface ItemTagRecord {
   item_id: string;
   tag_id: string;
 }
+
+/** 家族で「興味なし」にした候補 */
+export interface HiddenRecord {
+  item_id: string;
+  created_at: string;
+}
+
+export const positionSources = ["parent", "source_page", "geocoder"] as const;
+export type PositionSource = (typeof positionSources)[number];
 
 /** 家族で共有する保存（ブックマーク） */
 export interface BookmarkRecord {
