@@ -4,7 +4,8 @@
  *
  * wrangler のリモートバインディングは内部の実行環境（workerd）が自分で名前解決するため、
  * 通信がプロキシ経由に限られる環境（Claude Code のサンドボックスなど）では使えない。
- * こちらは Node の fetch だけを使うので、HTTPS プロキシ経由でも動く。認証は API トークン（CLOUDFLARE_API_TOKEN）。
+ * こちらは Node の fetch だけを使うので、HTTPS プロキシ経由でも動く（package.json のコマンドで NODE_USE_ENV_PROXY=1 を付け、
+ * Node の fetch に HTTPS_PROXY を使わせる）。認証は API トークン（CLOUDFLARE_API_TOKEN）。
  */
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
