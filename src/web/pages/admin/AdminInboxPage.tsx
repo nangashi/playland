@@ -1,14 +1,7 @@
 import { useState } from "react";
 import { Link, useLoaderData, useRevalidator, type LoaderFunctionArgs } from "react-router";
 import type { AdminInboxEntry } from "../../../domain/api";
-import {
-  ageRuleText,
-  mediaKindLabel,
-  priceLabel,
-  rainLabel,
-  reservationLabel,
-  tripLabel,
-} from "../../../domain/labels";
+import { mediaKindLabel, priceLabel, rainLabel, reservationLabel, tripLabel } from "../../../domain/labels";
 import { getTag } from "../../../domain/tags";
 import { tripKindOf } from "../../../domain/trip";
 import { adminMediaUrl, decideInbox, fetchAdminInbox } from "../../api";
@@ -109,7 +102,6 @@ function InboxCard({ entry }: { entry: AdminInboxEntry }) {
           {item.reservation_note ? `：${item.reservation_note}` : ""}
         </li>
         <li>{rainLabel[item.rain_policy]}</li>
-        <li>{ageRuleText(item.age_min_kind, item.age_min, item.age_max_kind, item.age_max)}</li>
         {item.official_url && (
           <li>
             <a href={item.official_url} target="_blank" rel="noopener noreferrer">
