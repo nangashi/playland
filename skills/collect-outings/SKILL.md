@@ -1,14 +1,18 @@
 ---
 name: collect-outings
-description: 家族向けお出かけ発見アプリ（playland）の候補（常設スポット）を集め、登録用 JSON を作って検証・プレビューする。既存の候補の空欄（管理画面で追加した候補など）を公式ページで調べて補足する。親から「お出かけ先を集めて」「このURLを候補に追加して」「追加した場所の情報を埋めて」と頼まれたときに使う。登録（apply）は親の承認後だけ。
+description: 家族向けお出かけ発見アプリ（playland）の候補（常設スポット）を集め、登録用 JSON と写真リストを作り、下書きで登録して親の「承認待ち」画面に載せる。既存の候補の空欄（管理画面で追加した候補など）を公式ページで調べて補足する。親から「お出かけ先を集めて」「このURLを候補に追加して」「追加した場所の情報を埋めて」と頼まれたときに使う。公開は親が承認待ちの画面で行う。
 ---
 
 # お出かけ候補の収集
 
 家族限定アプリに載せる、子ども連れで行ける **常設スポット**（施設・公園など）を集める手順。
 **イベント（開催日のある企画）は次のフェーズで対応するため、今は集めない**（`kind` は `spot` だけ）。
-あなた（エージェント）の役割は **何を調べるかを決め、取得したページを登録用 JSON に整理すること** まで。
+あなた（エージェント）の役割は **何を調べるかを決め、取得したページを登録用 JSON と写真リストに整理し、固定のコマンドを実行すること**。
 検証・照合・DB への登録は固定のコマンドが行う。SQL やシェルで DB を直接触らない。
+
+**親の手間は「承認待ちの URL を開いてボタンを押す」だけにする。** コマンドの実行はあなたが行い、
+親にコマンドを打たせたり、番号を返信させたりしない。取り込んだ候補は **下書き**、写真は **採用待ち** で保存され、
+親が管理画面の「承認待ち」（`/admin/inbox`）で公開・見送り・写真の採用を決めるまで家族の画面には出ない。
 
 ## 守ること
 
@@ -18,16 +22,18 @@ description: 家族向けお出かけ発見アプリ（playland）の候補（�
 - **不明は不明のまま** `unknown` / `null` にする。推測で埋めない。未確認を `false`・0円・0分にしない。
 - 座標・Google の Place ID を生成しない。元ページに座標が書かれている場合だけ `position_source: "source_page"` で入れる。
 - 根拠（evidence）は元ページの **短い引用**（300 文字以内）。記事を全文転載しない。
-- 登録（`apply`）は **親が preview の結果を確認して承認してから**。承認なしに実行しない。
+- 下書き・採用待ちでの登録（`run`）は親の承認を待たずに実行してよい。**公開は親が承認待ちの画面で行う**（あなたは公開しない）。
 - 対象は、親の指示で `--target local`（手元の確認用）か `--target production`（本番）を選ぶ。本番への書き込みには `--confirm` が必要で、**親の承認を得たときだけ付ける**。
-- 画像を自分でダウンロード・保存しない。写真は「写真リスト」に候補を書き、固定のコマンドで取得・親の確認・保存を行う（下の「写真」）。
+- 画像を自分でダウンロード・保存しない。写真は「写真リスト」に候補を書き、固定のコマンドで取得・採用待ちで保存する（下の「写真」）。
+- ローカルの DB（`.wrangler/state`）と `.local/` はメインの作業ツリーにある。取り込みはメインの作業ツリーで起動したセッションで行う
+  （ワークツリーのサンドボックスからはメインの DB に書き込めない）。
 
 ## 手順
 
 ### 本番で取り込むとき
 
-以下の手順の `--target local` を `--target production` に読み替える。本番への書き込みコマンド（apply・geocode --apply・photos-apply）には、
-親の承認後に `--confirm` を付ける。登録や写真の保存のあとは `pnpm ops backup --target production` を実行する（詳細は `docs/production.md`）。
+以下の手順の `--target local` を `--target production` に読み替える。本番への書き込みコマンド（run・apply・geocode --apply・photos-fetch・enrich-apply）には、
+親の承認後に `--confirm` を付ける。承認待ちの URL は本番のアプリの `/admin/inbox`。登録や写真の保存のあとは `pnpm ops backup --target production` を実行する（詳細は `docs/production.md`）。
 
 ### 1. 準備
 
@@ -77,67 +83,52 @@ pnpm ingest sources                       # 収集元（config/sources.yaml）
 | `evidence` | 不明以外にした判定には根拠が必須: `item.rain_policy` / `item.age` / `item.eligibility`（同伴）/ `item.reservation` / `item.price` |
 | `needs_review` | 迷った点・矛盾・確認できなかった点を親向けに書く |
 
-### 5. 検証する
+### 5. 写真の候補を挙げる
 
-```bash
-pnpm ingest validate .local/ingest/<batch_id>.json
-```
-
-エラーは直す。**根拠を作って通そうとしない。** 根拠がなければ判定を `unknown` に戻す。
-
-### 6. プレビューして、親に確認してもらう
-
-```bash
-pnpm ingest preview .local/ingest/<batch_id>.json --target local
-```
-
-結果（新規・既存・要確認・エラー、タグの提案、画像候補）を親に要約して伝え、**ここで止まって承認を待つ**。
-「要確認」は重複の疑い・同名の場所・needs_review があるもの。親が登録してよいと言った番号だけを `--accept` に渡す。
-
-### 7. 親の承認後に登録する
-
-```bash
-pnpm ingest apply .local/ingest/<batch_id>.json --target local [--accept 1,3]
-```
-
-- 登録済み（同じ出典キー）の候補は変更されない。親の修正も上書きされない。
-- 失敗した候補があれば、原因を直して同じコマンドを再実行する（登録済みはスキップされる）。
-
-### 8. 座標を取得する
-
-```bash
-pnpm ingest geocode --target local          # 確認（国土地理院 住所検索の結果を表示）
-pnpm ingest geocode --target local --apply  # 保存（位置は「おおよそ」）
-```
-
-住所があり、座標がなく、親が座標を指定していない場所だけが対象。検索結果の住所が問い合わせの先頭と合わないものは採用しない。
-住所が分からない場所は、施設の公式のアクセスページで住所を確認して、親の了承を得て管理画面（または管理 API）で登録してから実行する。
-
-### 9. 写真の候補を挙げる
-
-家族内の私的な利用として、出典を記録して保存する方針。施設の外観や、遊び・体験の特徴が分かる写真を選ぶ。
+家族内の私的な利用として、出典を記録して保存する方針。施設の外観や、遊び・体験の特徴が分かる写真を選ぶ（1 候補 2〜4 枚）。
 
 1. 各施設の公式ページから、ページ上にある画像 URL だけを挙げる（推測しない）。ロゴ・アイコン・地図・文字だけの画像・告知バナーは除く。
-2. `.local/ingest/photos-<番号>.json` に書く（形式は `src/ingest/photos.ts` の `photoListSchema`）。
+2. `.local/ingest/photos-<batch_id>.json` に書く（形式は `src/ingest/photos.ts` の `photoListSchema`）。
    候補は出典キー（`source_id` + `source_key`）で指定する。出典キーのない候補は `item_id` で指定する。
    `kind` は venue（施設の外観・設備）／past_event（過去のワークショップ等の様子）／image（イメージ）。`credit` は掲載元、`caption` は写っているもの。
-3. 取得して確認ページを作る（固定コードが https・内部アドレス拒否・5MB・画像形式を検査する）:
 
-   ```bash
-   pnpm ingest photos-fetch .local/ingest/photos-<番号>.json --target local
-   ```
+### 6. 検証して、下書きで登録する
 
-4. 親が `.local/ingest/photos/<batch>/review.html` を見て、採用する番号を決める。**ここで止まって承認を待つ。**
-5. 承認された番号だけを保存する:
+```bash
+pnpm ingest validate .local/ingest/<batch_id>.json      # エラーは直す。根拠を作って通そうとしない
+pnpm ingest run .local/ingest/<batch_id>.json --target local --photos .local/ingest/photos-<batch_id>.json
+```
 
-   ```bash
-   pnpm ingest photos-apply .local/ingest/photos-<番号>.json --target local --accept 0,3,5
-   ```
+`run` は、検証 → 下書きで登録（要確認の候補も含む。照合で見つかった重複の疑いなどは「確認してほしい点」に残る）→
+住所から座標（国土地理院 住所検索・おおよその位置）→ 自宅からの距離 → 写真を取得して採用待ちで保存、をまとめて行う。
+同じ出典キーは登録済みとしてスキップするので、途中で失敗しても同じコマンドの再実行で続きから完了できる。
+写真の取得先は https のみ・内部アドレス拒否・5MB まで・実際の内容で形式を判定（固定コードが検査する）。
 
-### 10. 報告する
+### 7. 親に承認待ちの URL を渡す
 
-登録した件数、スキップした件数と理由、タグの提案、見つけた良い収集元（`config/sources.yaml` への追加案）を親に伝える。
-`config/sources.yaml` の変更は親の了承を得てから行う。
+1. ローカルの確認は、親が起動しておいた開発サーバー（`pnpm dev`、既定は http://localhost:5173）で見る。
+   サンドボックスの中で起動したサーバーには親のブラウザーから繋がらないため、あなたは起動しない。
+2. 親に **承認待ちの URL（`http://localhost:5173/admin/inbox`）** と、短い要約（登録した件数・スキップした件数と理由・特に確認してほしい点・タグの提案）を伝える。
+   PIN の入力を求められたら、親が入力する。
+3. 親は画面で、候補ごとに内容・根拠・確認してほしい点・写真を見て、写真にチェックを付けて「公開する」か「見送る」を押す。
+   細かい修正は「内容を直す」（候補の編集画面）、位置が未設定の場所は地図で指定する。**あなたは親の返事を待たなくてよい。**
+
+見送った候補は非表示で残り、同じ出典キーでは再び取り込まれない。採用されなかった写真は消える。
+
+### 8. 報告する
+
+見つけた良い収集元（`config/sources.yaml` への追加案）があれば親に伝える。`config/sources.yaml` の変更は親の了承を得てから行う。
+座標が見つからなかった場所は、公式のアクセスページの住所を確かめて伝える（親が承認待ちの画面から地図で指定できる）。
+
+### 個別のコマンド（通常は run だけでよい）
+
+```bash
+pnpm ingest preview <batch>.json --target local        # 照合結果だけを見る（DB に書かない）
+pnpm ingest apply   <batch>.json --target local --accept all   # 下書きで登録だけ
+pnpm ingest geocode --target local [--apply]            # 住所から座標
+pnpm ingest distances --target local                    # 自宅からの距離を計算し直す
+pnpm ingest photos-fetch <photos>.json --target local   # 写真を取得して採用待ちで保存
+```
 
 ## 既存の候補を補足する
 
@@ -167,10 +158,10 @@ pnpm ingest geocode --target local --apply  # 保存（位置は「おおよそ�
    | `place.address_text` | 場所の住所が空欄のときだけ。公式のアクセスページの記載。座標は書かない（あとで geocode） |
    | `evidence` | 雨天・年齢・同伴や参加条件・予約・料金・住所を書いたら根拠が必須（`item.rain_policy` / `item.age` / `item.eligibility` / `item.reservation` / `item.price` / `place.address`） |
 
-4. `photo_count` が 0 の候補は、同じ公式ページを調べるついでに写真の候補も挙げる。ルールは「9. 写真の候補を挙げる」と同じ。
+4. `photo_count` が 0 の候補は、同じ公式ページを調べるついでに写真の候補も挙げる。ルールは「5. 写真の候補を挙げる」と同じ。
    `.local/ingest/photos-enrich-<番号>.json` に書き、候補は **`"item": { "item_id": "<incomplete.json の item_id>" }`** で指定する
    （管理画面で追加した候補には出典キーがないため）。
-5. 検証・プレビューし、写真を取得して確認ページを作る:
+5. 検証・プレビューし、写真を取得して採用待ちで保存する:
 
    ```bash
    pnpm ingest enrich-validate .local/ingest/enrich-<番号>.json
@@ -179,14 +170,14 @@ pnpm ingest geocode --target local --apply  # 保存（位置は「おおよそ�
    ```
 
    `+` が埋める項目、`=` が値があるため変えない項目。「書き出し後に変更あり」は書き出しからやり直す。
-   プレビューの要約と、写真の確認ページ（`.local/ingest/photos/<batch>/review.html`）を親にまとめて見せ、
-   **ここで止まって、補足と写真それぞれについて親の承認を待つ。**
-6. 親が承認した番号だけを登録する（すべてなら `--accept all`）:
+   補足は公開中の候補の値を直接変えるため、プレビューの要約を親に見せ、**補足の登録（enrich-apply）は親の承認を待つ**。
+   写真は採用待ちなので、承認待ちの URL（`/admin/inbox`）を一緒に伝えれば、親が画面で選ぶ。
+6. 親が承認した番号だけを補足する（すべてなら `--accept all`）:
 
    ```bash
    pnpm ingest enrich-apply .local/ingest/enrich-<番号>.json --target local --accept 0,2
-   pnpm ingest photos-apply .local/ingest/photos-enrich-<番号>.json --target local --accept 0,3
    ```
 
    親の確認日時は更新しない。補足した項目は変更履歴（操作者 `ingest:enrich:<batch_id>`）と出典の根拠で区別できる。
-7. 住所を埋めた場所は「8. 座標を取得する」を実行する。本番では最後に `pnpm ops backup --target production`。
+7. 住所を埋めた場所は `pnpm ingest geocode --target local --apply` と `pnpm ingest distances --target local` を実行する。
+   本番では最後に `pnpm ops backup --target production`。

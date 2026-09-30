@@ -4,6 +4,7 @@ import { createBrowserRouter, redirect } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { Layout } from "./components/Layout";
 import { AdminHomePage, adminHomeLoader } from "./pages/admin/AdminHomePage";
+import { AdminInboxPage, adminInboxLoader } from "./pages/admin/AdminInboxPage";
 import { AdminItemPage, adminItemLoader } from "./pages/admin/AdminItemPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminPlacePage, adminPlaceLoader } from "./pages/admin/AdminPlacePage";
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { path: "/items/:id", element: <ItemPage />, loader: itemLoader },
       { path: "/admin/login", element: <AdminLoginPage /> },
       { path: "/admin", element: <AdminHomePage />, loader: adminHomeLoader },
+      { path: "/admin/inbox", element: <AdminInboxPage />, loader: adminInboxLoader },
       { path: "/admin/items/:id", element: <AdminItemPage />, loader: adminItemLoader },
       { path: "/admin/places/:id", element: <AdminPlacePage />, loader: adminPlaceLoader },
       { path: "/admin/settings", element: <AdminSettingsPage />, loader: adminSettingsLoader },

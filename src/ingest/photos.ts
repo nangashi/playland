@@ -5,7 +5,8 @@ import { idSchema, mediaKinds } from "../domain/model";
 
 /**
  * 写真の取り込み。スキルが候補（画像 URL・掲載ページ・種類・出典）を挙げ、
- * 固定コードが取得・形式確認し、親が一覧で確認して採用したものだけを非公開 R2 に保存する。
+ * 固定コードが取得・形式確認して非公開 R2 に「採用待ち（pending）」で保存する。
+ * 採用待ちの写真は家族の画面に出さず、親が承認待ちの画面で採用したものだけを表示する（採用しなかったものは消す）。
  * 家族内の私的な利用として保存し、出典（掲載ページ・画像 URL・クレジット）を必ず記録する。
  */
 
@@ -43,18 +44,6 @@ export const photoListSchema = z
 export type PhotoList = z.infer<typeof photoListSchema>;
 export type PhotoCandidate = PhotoList["photos"][number];
 
-/** 取得結果（.local/ingest/photos/<batch>/manifest.json） */
-export interface PhotoManifestEntry {
-  index: number;
-  status: "ok" | "error";
-  error: string | null;
-  file: string | null;
-  content_type: string | null;
-  byte_size: number | null;
-  sha256: string | null;
-  candidate: PhotoCandidate;
-}
-
 export type ItemResolver = (ref: PhotoCandidate["item"]) => Promise<{ id: string; title: string } | null>;
 
 /** 写真リストの候補の指定（出典キーか item_id）から候補を探す */
@@ -76,76 +65,69 @@ export function itemRefLabel(ref: PhotoCandidate["item"]): string {
   return "item_id" in ref ? ref.item_id : ref.source_key;
 }
 
-export interface PhotoApplyOutcome {
+export interface PhotoStageOutcome {
   index: number;
-  result: "saved" | "skipped_duplicate" | "skipped_not_accepted" | "error";
+  result: "staged" | "skipped_duplicate" | "error";
   media_id: string | null;
   reason: string | null;
 }
 
-export interface PhotoApplyInput {
-  entry: PhotoManifestEntry;
-  /** 取得したファイルの内容（採用分だけ読み込む） */
+export interface PhotoStageInput {
+  index: number;
+  candidate: PhotoCandidate;
+  /** 取得した画像。取得に失敗したものは null と理由 */
   bytes: Uint8Array | null;
+  error?: string | null;
 }
 
 /**
- * 親が採用した写真を保存する。
- * - 取得時から内容が変わっていないか（sha256）と形式・サイズを確かめ直す
+ * 取得した写真を採用待ちで保存する。
+ * - 形式・サイズを確かめ直す
  * - 同じ候補に同じ画像があれば保存しない（再実行で重複しない）
  * - R2 → D1 の順に書き、D1 が失敗したら R2 のファイルを消す
  */
-export async function applyPhotos(
+export async function stagePhotos(
   db: D1Database,
   bucket: R2Bucket,
-  inputs: readonly PhotoApplyInput[],
-  accept: ReadonlySet<number>,
+  inputs: readonly PhotoStageInput[],
   options: { resolveItem: ItemResolver; now?: () => Date; newId?: () => string },
-): Promise<PhotoApplyOutcome[]> {
+): Promise<PhotoStageOutcome[]> {
   const now = options.now ?? (() => new Date());
   const newId = options.newId ?? (() => crypto.randomUUID());
-  const outcomes: PhotoApplyOutcome[] = [];
+  const outcomes: PhotoStageOutcome[] = [];
 
-  for (const { entry, bytes } of inputs) {
-    const base = { index: entry.index, media_id: null };
-    if (!accept.has(entry.index)) {
-      outcomes.push({ ...base, result: "skipped_not_accepted", reason: null });
-      continue;
-    }
-    if (entry.status !== "ok" || !bytes) {
-      outcomes.push({ ...base, result: "error", reason: entry.error ?? "取得できていない写真です" });
+  for (const { index, candidate: c, bytes, error } of inputs) {
+    const base = { index, media_id: null };
+    if (!bytes) {
+      outcomes.push({ ...base, result: "error", reason: error ?? "取得できていない写真です" });
       continue;
     }
     const contentType = sniffImageType(bytes);
-    const sha256 = await sha256Hex(bytes);
-    if (!contentType || bytes.byteLength > MAX_IMAGE_BYTES || sha256 !== entry.sha256) {
-      outcomes.push({ ...base, result: "error", reason: "取得後にファイルが変わったか、形式・サイズが対象外です" });
+    if (!contentType || bytes.byteLength > MAX_IMAGE_BYTES) {
+      outcomes.push({ ...base, result: "error", reason: "形式・サイズが対象外です" });
       continue;
     }
-    const item = await options.resolveItem(entry.candidate.item);
+    const item = await options.resolveItem(c.item);
     if (!item) {
       outcomes.push({ ...base, result: "error", reason: "対応する候補が登録されていません" });
       continue;
     }
+    const sha256 = await sha256Hex(bytes);
     const dup = await db
       .prepare(`SELECT id FROM media WHERE item_id = ? AND sha256 = ?`)
       .bind(item.id, sha256)
       .first<{ id: string }>();
     if (dup) {
       // 保存済みの写真に説明がなければ補う（親が入れた説明は変えない）
-      if (entry.candidate.caption) {
-        await db
-          .prepare(`UPDATE media SET caption = ? WHERE id = ? AND caption IS NULL`)
-          .bind(entry.candidate.caption, dup.id)
-          .run();
+      if (c.caption) {
+        await db.prepare(`UPDATE media SET caption = ? WHERE id = ? AND caption IS NULL`).bind(c.caption, dup.id).run();
       }
-      outcomes.push({ index: entry.index, result: "skipped_duplicate", media_id: dup.id, reason: null });
+      outcomes.push({ index, result: "skipped_duplicate", media_id: dup.id, reason: null });
       continue;
     }
 
     const id = newId();
     const key = `media/${id}`;
-    const c = entry.candidate;
     const at = now().toISOString();
     await bucket.put(key, bytes, { httpMetadata: { contentType } });
     try {
@@ -153,8 +135,8 @@ export async function applyPhotos(
         db
           .prepare(
             `INSERT INTO media (id, r2_key, item_id, kind, source_url, credit, caption, license_note,
-                                reviewed_by, reviewed_at, content_type, byte_size, sha256, sort_order, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'parent', ?, ?, ?, ?,
+                                content_type, byte_size, sha256, status, sort_order, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
                      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM media WHERE item_id = ?), ?)`,
           )
           .bind(
@@ -166,7 +148,6 @@ export async function applyPhotos(
             c.credit,
             c.caption,
             `家族内の私的な利用として保存（親が確認して採用）。画像: ${c.image_url}`,
-            at,
             contentType,
             bytes.byteLength,
             sha256,
@@ -180,7 +161,7 @@ export async function applyPhotos(
           )
           .bind(id, JSON.stringify(["kind", "source_url", "credit", "license_note"]), at),
       ]);
-      outcomes.push({ index: entry.index, result: "saved", media_id: id, reason: null });
+      outcomes.push({ index, result: "staged", media_id: id, reason: null });
     } catch (err) {
       await bucket.delete(key).catch(() => undefined);
       outcomes.push({ ...base, result: "error", reason: err instanceof Error ? err.message.slice(0, 300) : String(err) });

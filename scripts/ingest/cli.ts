@@ -5,20 +5,23 @@
  *   pnpm ingest sources                               config/sources.yaml の検証
  *   pnpm ingest export-known --target local           照合用の既存データを書き出す
  *   pnpm ingest validate <bundle.json>                形式・根拠・整合の検証（DB を見ない）
+ *   pnpm ingest run      <bundle.json> --target local [--photos <photos.json>]
+ *                                                     検証→下書きで登録→座標→距離→写真を採用待ちで保存（通常はこれだけ）
  *   pnpm ingest preview  <bundle.json> --target local 新規・既存・要確認・エラーの一覧
- *   pnpm ingest apply    <bundle.json> --target local [--accept 1,3]
+ *   pnpm ingest apply    <bundle.json> --target local [--accept 1,3|all]  下書きで登録
  *   pnpm ingest geocode  --target local [--apply]      住所から座標を取得（国土地理院 住所検索）
  *   pnpm ingest distances --target local               すべての場所の自宅からの距離を計算し直す
- *   pnpm ingest photos-fetch <photos.json> --target local           写真の候補を取得し確認ページを作る
- *   pnpm ingest photos-apply <photos.json> --target local --accept 1,3  採用した写真を保存
+ *   pnpm ingest photos-fetch <photos.json> --target local           写真の候補を取得し、採用待ちで保存
  *   pnpm ingest enrich-export  --target local [--all]  空欄の残る候補を書き出す（既定は管理画面で追加した候補）
  *   pnpm ingest enrich-validate <enrich.json>          補足用 JSON の検証（DB を見ない）
  *   pnpm ingest enrich-preview  <enrich.json> --target local   埋める項目・変えない項目の一覧
  *   pnpm ingest enrich-apply    <enrich.json> --target local --accept 0,2|all  空欄だけを埋める
  *
  * --target production は wrangler login の認証で本番の D1・R2 に接続する。
- * 本番への書き込み（apply / geocode --apply / distances / photos-apply / enrich-apply）には --confirm が必要。
- * エージェントは preview の結果を親に見せ、承認を得てから --confirm を付ける。
+ * 本番への書き込み（run / apply / geocode --apply / distances / photos-fetch / enrich-apply）には --confirm が必要。
+ *
+ * 取り込んだ候補は下書き、写真は採用待ちで保存され、家族の画面には出ない。
+ * 親は管理画面の「承認待ち」（/admin/inbox）で内容と写真を確認し、公開・見送りを決める。
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -38,7 +41,7 @@ import { geocodePlaces, gsiGeocoder } from "../../src/ingest/geocode";
 import { loadKnown } from "../../src/ingest/known";
 import { getOrigin, refreshHomeDistances } from "../../src/server/repo";
 import { openTarget, parseTarget, requireConfirm, UsageError, type TargetEnv } from "../lib/target";
-import { applyFetchedPhotos, fetchPhotos, readPhotoList } from "./photos";
+import { fetchAndStagePhotos, readPhotoList } from "./photos";
 import { loadSources } from "./sources";
 
 const MAX_BUNDLE_BYTES = 5 * 1024 * 1024;
@@ -55,6 +58,7 @@ const { positionals, values } = parseArgs({
     apply: { type: "boolean", default: false },
     confirm: { type: "boolean", default: false },
     all: { type: "boolean", default: false },
+    photos: { type: "string" },
   },
 });
 const [command, file] = positionals;
@@ -71,6 +75,8 @@ async function main(): Promise<number> {
       return withDb((db) => exportKnown(db));
     case "preview":
       return withDb((db) => preview(db, requireFile()));
+    case "run":
+      return withDb((db, env) => runAll(db, env.MEDIA, requireFile()), "候補の登録（下書き）");
     case "apply":
       return withDb((db) => apply(db, requireFile()), "候補の登録");
     case "geocode":
@@ -78,9 +84,7 @@ async function main(): Promise<number> {
     case "distances":
       return withDb((db) => distances(db), "自宅からの距離の保存");
     case "photos-fetch":
-      return withDb((db) => photosFetch(db, requireFile()));
-    case "photos-apply":
-      return withDb((db, env) => photosApply(db, env.MEDIA, requireFile()), "写真の保存");
+      return withDb((db, env) => photosFetch(db, env.MEDIA, requireFile()), "写真の保存（採用待ち）");
     case "enrich-export":
       return withDb((db) => enrichExport(db));
     case "enrich-validate":
@@ -91,7 +95,7 @@ async function main(): Promise<number> {
       return withDb((db) => enrichApply(db, requireFile()), "候補の補足");
     default:
       console.error(
-        "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|distances|photos-fetch|photos-apply|enrich-export|enrich-validate|enrich-preview|enrich-apply> [file] --target local",
+        "使い方: pnpm ingest <tags|sources|export-known|validate|run|preview|apply|geocode|distances|photos-fetch|enrich-export|enrich-validate|enrich-preview|enrich-apply> [file] --target local",
       );
       return 2;
   }
@@ -174,7 +178,7 @@ async function preview(db: D1Database, path: string): Promise<number> {
   console.log(
     `\n新規 ${result.counts.new} / 既存 ${result.counts.existing} / 要確認 ${result.counts.review} / エラー ${result.counts.error}`,
   );
-  console.log("要確認の候補を登録する場合は、確認したうえで apply に --accept 番号 を付けてください。");
+  console.log("run（または apply --accept all）では要確認も含めて下書きで登録し、親が承認待ちの画面で確認します。");
   return 0;
 }
 
@@ -186,20 +190,59 @@ async function apply(db: D1Database, path: string): Promise<number> {
     printValidation(v, sourceErrors);
     return 1;
   }
-  const accept = parseAccept();
+  const accept = values.accept?.trim() === "all" ? "all" : parseAccept();
   const result = await applyBundle(db, raw, { target: parseTarget(values.target), inputHash: hash, accept });
-  if (values.json) {
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    const label = { inserted: "登録", skipped_existing: "既存のため変更なし", skipped_review: "要確認のため未登録", error: "失敗" };
-    for (const o of result.outcomes) {
-      console.log(`[${label[o.result]}] #${o.index} ${o.title}${o.item_id ? ` (${o.item_id})` : ""}`);
-      if (o.reason) console.log(`    ${o.reason}`);
-    }
-    console.log(`\n結果: ${result.status}（実行 ID ${result.run_id}）`);
-    if (result.status !== "completed") console.log("失敗した候補は、原因を直して同じコマンドを再実行すると登録されます（登録済みの候補はスキップ）。");
-  }
+  if (values.json) console.log(JSON.stringify(result, null, 2));
+  else printApplyResult(result);
   return result.status === "failed" ? 1 : 0;
+}
+
+function printApplyResult(result: Awaited<ReturnType<typeof applyBundle>>) {
+  const label = { inserted: "下書きで登録", skipped_existing: "既存のため変更なし", skipped_review: "要確認のため未登録", error: "失敗" };
+  for (const o of result.outcomes) {
+    console.log(`[${label[o.result]}] #${o.index} ${o.title}${o.item_id ? ` (${o.item_id})` : ""}`);
+    if (o.reason) console.log(`    ${o.reason}`);
+  }
+  console.log(`\n結果: ${result.status}（実行 ID ${result.run_id}）`);
+  if (result.status !== "completed") console.log("失敗した候補は、原因を直して同じコマンドを再実行すると登録されます（登録済みの候補はスキップ）。");
+}
+
+/**
+ * 取り込みの一連の処理をまとめて行う。候補はすべて下書き・写真は採用待ちで保存するので、家族の画面には出ない。
+ * 途中で失敗しても、同じコマンドの再実行で続きから完了できる（登録済みの候補・保存済みの写真はスキップ）。
+ */
+async function runAll(db: D1Database, bucket: R2Bucket, path: string): Promise<number> {
+  const { raw, hash } = await readBundle(path);
+  const v = validateBundle(raw);
+  const sourceErrors = await checkSourceIds(v);
+  if (!v.ok || sourceErrors.length > 0) {
+    printValidation(v, sourceErrors);
+    return 1;
+  }
+  const photoList = values.photos ? await readPhotoList(values.photos) : null;
+
+  console.log("## 候補の登録（下書き）");
+  const result = await applyBundle(db, raw, { target: parseTarget(values.target), inputHash: hash, accept: "all" });
+  printApplyResult(result);
+
+  console.log("\n## 座標（住所検索）");
+  const geo = await geocodePlaces(db, gsiGeocoder(), { apply: true, delayMs: 1000 });
+  for (const o of geo) {
+    console.log(o.status === "found" ? `[保存] ${o.name}（一致: ${o.matched}）` : `[${o.status === "error" ? "失敗" : "見つからない"}] ${o.name}  検索語: ${o.query}`);
+  }
+  if (geo.length === 0) console.log("対象なし");
+
+  console.log("\n## 自宅からの距離");
+  console.log((await getOrigin(db)) ? `${await refreshHomeDistances(db)} か所を更新` : "自宅の座標が未設定のため省略");
+
+  let photoErrors = 0;
+  if (photoList) {
+    console.log("\n## 写真（採用待ち）");
+    const outcomes = await fetchAndStagePhotos(db, bucket, photoList);
+    photoErrors = outcomes.filter((o) => o.result === "error").length;
+  }
+  console.log("\n親の確認: 管理画面の「承認待ち」 /admin/inbox");
+  return result.status === "failed" ? 1 : result.status === "partial" || photoErrors > 0 ? 3 : 0;
 }
 
 function parseAccept(): Set<number> {
@@ -239,23 +282,10 @@ async function distances(db: D1Database): Promise<number> {
   return 0;
 }
 
-async function photosFetch(db: D1Database, path: string): Promise<number> {
-  const list = await readPhotoList(path);
-  const { dir, manifest } = await fetchPhotos(db, list, parseTarget(values.target));
-  const ok = manifest.filter((m) => m.status === "ok").length;
-  console.log(`\n${ok} / ${manifest.length} 件を取得しました。${dir}/review.html を開いて、採用する番号を選んでください。`);
-  return 0;
-}
-
-async function photosApply(db: D1Database, bucket: R2Bucket, path: string): Promise<number> {
-  const accept = parseAccept();
-  if (accept.size === 0) throw new UsageError("採用する番号を --accept で指定してください");
-  const list = await readPhotoList(path);
-  const outcomes = await applyFetchedPhotos(db, bucket, list, accept);
-  const label = { saved: "保存", skipped_duplicate: "保存済みのため省略", skipped_not_accepted: "", error: "失敗" };
-  for (const o of outcomes.filter((o) => o.result !== "skipped_not_accepted")) {
-    console.log(`[${label[o.result]}] #${o.index}${o.reason ? `  ${o.reason}` : ""}`);
-  }
+async function photosFetch(db: D1Database, bucket: R2Bucket, path: string): Promise<number> {
+  const outcomes = await fetchAndStagePhotos(db, bucket, await readPhotoList(path));
+  const staged = outcomes.filter((o) => o.result === "staged").length;
+  console.log(`\n${staged} / ${outcomes.length} 件を採用待ちで保存しました。親の確認: 管理画面の「承認待ち」 /admin/inbox`);
   return outcomes.some((o) => o.result === "error") ? 1 : 0;
 }
 

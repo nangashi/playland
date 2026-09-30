@@ -9,6 +9,8 @@ import { get, parentLogin, seed, sendJson } from "./helpers";
 const clone = (): Bundle & Record<string, unknown> => structuredClone(sample) as never;
 const apply = (bundle: unknown, accept: number[] = []) =>
   applyBundle(env.DB, bundle, { target: "test", inputHash: "hash", accept: new Set(accept) });
+/** 親が承認待ちの画面で公開したのと同じ状態にする */
+const publishDrafts = () => env.DB.prepare("UPDATE items SET publish_status = 'published' WHERE publish_status = 'draft'").run();
 const errorsOf = (bundle: unknown) => {
   const r = validateBundle(bundle);
   if (r.ok) return [];
@@ -119,6 +121,11 @@ describe("apply（登録）", () => {
     expect(r.status).toBe("completed");
     expect(r.outcomes.map((o) => o.result)).toEqual(["inserted", "inserted", "inserted", "skipped_review"]);
 
+    // 下書きで登録し、親が公開するまで家族の画面には出さない
+    const status = await env.DB.prepare("SELECT publish_status FROM items WHERE id = ?").bind(r.outcomes[0]!.item_id).first();
+    expect(status).toEqual({ publish_status: "draft" });
+    expect((await get(`/api/items/${r.outcomes[0]!.item_id}`)).status).toBe(404);
+    await publishDrafts();
     const detail: ItemDetailResponse = await (await get(`/api/items/${r.outcomes[0]!.item_id}`)).json();
     expect(detail).toMatchObject({
       title: "サンプル市こどもプラネタリウム",
@@ -137,6 +144,21 @@ describe("apply（登録）", () => {
   it("親が認めた要確認の候補は登録できる", async () => {
     expect((await apply(sample)).outcomes[3]!.result).toBe("skipped_review");
     expect((await apply(sample, [3])).outcomes[3]!.result).toBe("inserted");
+  });
+
+  it("accept all では要確認も下書きで登録し、照合で見つかった確認事項を出典に残す", async () => {
+    const b = clone();
+    b.candidates[0]!.place.name = "サンプル森林公園";
+    const r = await applyBundle(env.DB, b, { target: "test", inputHash: "hash", accept: "all" });
+    expect(r.outcomes.map((o) => o.result)).toEqual(["inserted", "inserted", "inserted", "inserted"]);
+    const entry = await env.DB.prepare("SELECT needs_review FROM source_entries WHERE item_id = ?")
+      .bind(r.outcomes[0]!.item_id)
+      .first<{ needs_review: string }>();
+    expect(JSON.parse(entry!.needs_review).join()).toMatch(/既存の場所と同じ名前/);
+    const pond = await env.DB.prepare("SELECT needs_review FROM source_entries WHERE item_id = ?")
+      .bind(r.outcomes[3]!.item_id)
+      .first<{ needs_review: string }>();
+    expect(JSON.parse(pond!.needs_review)).toEqual(["開放期間（夏季）の具体的な日付が書かれていない"]);
   });
 
   it("同じバンドルの再実行で二重登録しない（A16）", async () => {
@@ -192,6 +214,7 @@ describe("apply（登録）", () => {
     b.candidates[0]!.item.title = "プラネタリウム（改題）";
     const again = await apply(b);
     expect(again.outcomes[0]!.result).toBe("skipped_existing");
+    await publishDrafts();
     const detail: ItemDetailResponse = await (await get(`/api/items/${id}`)).json();
     expect(detail).toMatchObject({ rain_policy: "conditional", title: "サンプル市こどもプラネタリウム", tag_ids: ["cooking"] });
   });
@@ -254,6 +277,7 @@ describe("apply（登録）", () => {
       .bind(itemId)
       .first<{ home_distance_km: number | null }>();
     expect(row?.home_distance_km).toBe(111.2);
+    await publishDrafts();
     const detail: ItemDetailResponse = await (await get(`/api/items/${itemId}`)).json();
     expect(detail.trip).toBe("trip");
     // 座標のない場所は距離なし
@@ -264,6 +288,7 @@ describe("apply（登録）", () => {
   it("取り込んだ候補は一覧・保存でそのまま使える", async () => {
     const r = await apply(sample);
     const id = r.outcomes[1]!.item_id!;
+    await publishDrafts();
     const list: ItemListResponse = await (await get("/api/items?category=park")).json();
     expect(list.items.map((i) => i.id)).toContain(id);
     expect((await sendJson("PUT", `/api/bookmarks/${id}`, undefined)).status).toBe(204);

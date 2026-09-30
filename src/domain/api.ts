@@ -164,3 +164,28 @@ export interface AdminPlaceListResponse {
 }
 
 export type AdminSettingsResponse = FamilySettingsRecord;
+
+/** 取り込みの出典（根拠・要確認・タグの提案）。承認待ちの画面で親が確認する */
+export interface AdminSourceEntry {
+  source_id: string;
+  url: string;
+  fetched_at: string;
+  batch_id: string;
+  evidence: { field: string; text: string; source_url: string }[];
+  needs_review: string[];
+  suggested_tags: string[];
+}
+
+export interface AdminInboxEntry {
+  item: ItemRecord;
+  tag_ids: string[];
+  place: PlaceRecord | null;
+  sources: AdminSourceEntry[];
+  /** 候補の写真（採用待ちを含む） */
+  media: MediaRecord[];
+}
+
+/** 下書きの候補と、採用待ちの写真がある候補 */
+export interface AdminInboxResponse {
+  entries: AdminInboxEntry[];
+}
