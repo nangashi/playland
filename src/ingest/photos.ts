@@ -118,6 +118,13 @@ export async function applyPhotos(
       .bind(item.id, sha256)
       .first<{ id: string }>();
     if (dup) {
+      // 保存済みの写真に説明がなければ補う（親が入れた説明は変えない）
+      if (entry.candidate.caption) {
+        await db
+          .prepare(`UPDATE media SET caption = ? WHERE id = ? AND caption IS NULL`)
+          .bind(entry.candidate.caption, dup.id)
+          .run();
+      }
       outcomes.push({ index: entry.index, result: "skipped_duplicate", media_id: dup.id, reason: null });
       continue;
     }
@@ -131,9 +138,9 @@ export async function applyPhotos(
       await db.batch([
         db
           .prepare(
-            `INSERT INTO media (id, r2_key, item_id, kind, source_url, credit, license_note,
+            `INSERT INTO media (id, r2_key, item_id, kind, source_url, credit, caption, license_note,
                                 reviewed_by, reviewed_at, content_type, byte_size, sha256, sort_order, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'parent', ?, ?, ?, ?,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'parent', ?, ?, ?, ?,
                      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM media WHERE item_id = ?), ?)`,
           )
           .bind(
@@ -143,6 +150,7 @@ export async function applyPhotos(
             c.kind,
             c.page_url,
             c.credit,
+            c.caption,
             `家族内の私的な利用として保存（親が確認して採用）。画像: ${c.image_url}`,
             at,
             contentType,

@@ -655,10 +655,16 @@ button.link-button {
 }
 
 .detail-media {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
   aspect-ratio: 4 / 3;
   max-height: 240px;
   border-radius: var(--radius);
   overflow: hidden;
+  cursor: zoom-in;
 }
 
 .detail-media .placeholder {
@@ -792,9 +798,114 @@ button.link-button {
 }
 
 .gallery .photo {
+  display: block;
   aspect-ratio: 4 / 3;
   border-radius: 6px;
   overflow: hidden;
+}
+
+.gallery-item {
+  display: grid;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: zoom-in;
+}
+
+.gallery-caption {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- 写真の拡大表示 ---- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 48px 12px 12px;
+  background: rgb(0 0 0 / 0.88);
+}
+
+.lightbox-figure {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  max-width: min(1100px, 100%);
+}
+
+.lightbox-figure img {
+  max-width: 100%;
+  max-height: calc(100vh - 160px);
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.lightbox-caption {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+  color: #e6e8eb;
+  font-size: 13px;
+}
+
+.lightbox-caption strong {
+  font-size: 15px;
+  color: #fff;
+}
+
+.lightbox-caption a {
+  color: #8fd3cb;
+}
+
+.lightbox-count {
+  color: #9aa4ae;
+  font-size: 12px;
+}
+
+.lightbox-close,
+.lightbox-nav {
+  position: absolute;
+  border: 0;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  border-radius: 999px;
+}
+
+.lightbox-close {
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+}
+
+.lightbox-nav {
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.lightbox-nav.is-prev {
+  left: 8px;
+}
+
+.lightbox-nav.is-next {
+  right: 8px;
 }
 
 .photo.is-hidden img {

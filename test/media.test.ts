@@ -29,7 +29,7 @@ async function upload(
 describe("写真", () => {
   it("親が登録した写真を認証付きで返し、一覧のカードに使う", async () => {
     const headers = await parentLogin();
-    const res = await upload(headers, { item_id: "it-gym-spot", kind: "venue", credit: "おうちのひと撮影" });
+    const res = await upload(headers, { item_id: "it-gym-spot", kind: "venue", credit: "おうちのひと撮影", caption: "入口の壁" });
     expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: string };
 
@@ -41,6 +41,8 @@ describe("写真", () => {
 
     const list: ItemListResponse = await (await get("/api/items")).json();
     expect(list.items.find((i) => i.id === "it-gym-spot")?.cover).toEqual({ id, kind: "venue" });
+    const detail: ItemDetailResponse = await (await get("/api/items/it-gym-spot")).json();
+    expect(detail.media[0]).toMatchObject({ id, caption: "入口の壁", credit: "おうちのひと撮影" });
   });
 
   it("場所の写真は、候補自身の写真がなければカードに使う", async () => {

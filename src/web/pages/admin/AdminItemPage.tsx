@@ -395,7 +395,7 @@ function MediaSection({ data, reload }: { data: AdminItemResponse; reload: () =>
           <figure key={m.id} className={m.status === "hidden" ? "photo is-hidden" : "photo"}>
             <img src={`/media/${encodeURIComponent(m.id)}`} alt="" loading="lazy" />
             <figcaption className="photo-kind">
-              {mediaKindLabel[m.kind]}
+              {m.caption ?? mediaKindLabel[m.kind]}
               {m.status === "hidden" && "（非表示）"}
             </figcaption>
             <button
@@ -422,6 +422,10 @@ function MediaSection({ data, reload }: { data: AdminItemResponse; reload: () =>
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          写っているもの（拡大表示で出る説明）
+          <input name="caption" maxLength={200} />
         </label>
         <label>
           撮影者・出典の表示

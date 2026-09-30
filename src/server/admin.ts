@@ -398,6 +398,7 @@ adminApi.post("/media", async (c) => {
     kind: form.get("kind"),
     source_url: form.get("source_url") ?? undefined,
     credit: form.get("credit") ?? undefined,
+    caption: form.get("caption") ?? undefined,
     license_note: form.get("license_note") ?? undefined,
   });
   if (!(file instanceof File) || !fields.success) return c.json({ error: "invalid" }, 400);
@@ -426,9 +427,9 @@ adminApi.post("/media", async (c) => {
       db.batch([
         db
           .prepare(
-            `INSERT INTO media (id, r2_key, item_id, place_id, kind, source_url, credit, license_note,
+            `INSERT INTO media (id, r2_key, item_id, place_id, kind, source_url, credit, caption, license_note,
                                 reviewed_by, reviewed_at, content_type, byte_size, sha256, sort_order, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM media WHERE item_id IS ? AND place_id IS ?), ?)`,
           )
           .bind(
@@ -439,6 +440,7 @@ adminApi.post("/media", async (c) => {
             target.kind,
             target.source_url ?? null,
             target.credit ?? null,
+            target.caption ?? null,
             target.license_note ?? null,
             actor,
             now,

@@ -16,6 +16,7 @@ import { getTag } from "../../domain/tags";
 import type { ModeView } from "../../domain/transport";
 import { fetchAdminSession, fetchItem } from "../api";
 import { HideButton } from "../components/HideButton";
+import { Lightbox } from "../components/Lightbox";
 import { Photo } from "../components/Photo";
 import { SaveButton } from "../components/SaveButton";
 
@@ -32,6 +33,7 @@ export function ItemPage() {
   const navigate = useNavigate();
   const [saved, setSaved] = useState(item.saved);
   const [hidden, setHiddenState] = useState(item.hidden);
+  const [viewing, setViewing] = useState<number | null>(null);
   useEffect(() => {
     setSaved(item.saved);
     setHiddenState(item.hidden);
@@ -65,9 +67,14 @@ export function ItemPage() {
       <div className={item.cover ? "detail-layout has-media" : "detail-layout"}>
         {/* 写真がないときは場所を取らない */}
         {item.cover && (
-          <div className="detail-media">
+          <button
+            type="button"
+            className="detail-media"
+            onClick={() => setViewing(Math.max(0, item.media.findIndex((m) => m.id === item.cover?.id)))}
+            aria-label="写真を拡大"
+          >
             <Photo media={item.cover} alt={item.title} />
-          </div>
+          </button>
         )}
         <div className="detail-main">
           <header className="detail-head">
@@ -188,16 +195,28 @@ export function ItemPage() {
 
       {item.media.length > 1 && (
         <section className="section">
-          <h2 className="section-title">写真</h2>
+          <h2 className="section-title">写真（{item.media.length}枚）</h2>
           <div className="gallery">
-            {item.media.map((m) => (
-              <figure key={m.id} className="photo">
-                <img src={`/media/${encodeURIComponent(m.id)}`} alt="" loading="lazy" />
-                <figcaption className="photo-kind">{mediaKindLabel[m.kind]}</figcaption>
-              </figure>
+            {item.media.map((m, i) => (
+              <button
+                key={m.id}
+                type="button"
+                className="gallery-item"
+                onClick={() => setViewing(i)}
+                aria-label={`${m.caption ?? mediaKindLabel[m.kind]}を拡大`}
+              >
+                <span className="photo">
+                  <img src={`/media/${encodeURIComponent(m.id)}`} alt="" loading="lazy" />
+                </span>
+                <span className="gallery-caption">{m.caption ?? mediaKindLabel[m.kind]}</span>
+              </button>
             ))}
           </div>
         </section>
+      )}
+
+      {viewing !== null && (
+        <Lightbox media={item.media} index={viewing} onIndexChange={setViewing} onClose={() => setViewing(null)} />
       )}
 
       <footer className="provenance">

@@ -208,6 +208,7 @@ export const mediaUploadFieldsSchema = z
     kind: z.enum(mediaKinds),
     source_url: optionalUrl,
     credit: optionalText(200),
+    caption: optionalText(200),
     license_note: optionalText(1000),
   })
   .refine((v) => (v.item_id === undefined) !== (v.place_id === undefined), "候補か場所のどちらか一方を指定してください");

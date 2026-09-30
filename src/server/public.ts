@@ -147,7 +147,13 @@ publicApi.get("/items/:id", async (c) => {
     recommended_age_max: item.recommended_age_max,
     reservation_note: item.reservation_note,
     price_text: item.price_text,
-    media: media.map((m) => ({ id: m.id, kind: m.kind, credit: m.credit, source_url: m.source_url })),
+    media: media.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      credit: m.credit,
+      caption: m.caption,
+      source_url: m.source_url,
+    })),
     initialized_at: item.initialized_at,
     parent_reviewed_at: item.parent_reviewed_at,
   };

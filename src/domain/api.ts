@@ -90,6 +90,8 @@ export interface PlaceDetail extends PlaceSummary {
 
 export interface MediaInfo extends MediaRef {
   credit: string | null;
+  /** 写っているもの */
+  caption: string | null;
   source_url: string | null;
 }
 

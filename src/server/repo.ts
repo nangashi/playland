@@ -24,7 +24,7 @@ export const ITEM_COLUMNS = `id, kind, place_id, title, child_description, rain_
 const PLACE_COLUMNS = `id, name, address_text, latitude, longitude, position_accuracy,
   google_place_id, google_maps_url, position_source, position_note, version`;
 
-const MEDIA_COLUMNS = `id, r2_key, item_id, place_id, kind, source_url, credit, license_note,
+const MEDIA_COLUMNS = `id, r2_key, item_id, place_id, kind, source_url, credit, caption, license_note,
   content_type, byte_size, status, sort_order, created_at`;
 
 export async function listPublishedItems(db: D1Database): Promise<ItemRecord[]> {

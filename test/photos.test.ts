@@ -64,6 +64,24 @@ describe("写真の保存", () => {
     expect((await get(`/media/${r[0]!.media_id}`)).status).toBe(200);
   });
 
+  it("写っているものの説明を保存し、詳細に返す", async () => {
+    await run([{ entry: await entry(0), bytes: PNG }], [0]);
+    const detail: ItemDetailResponse = await (await get("/api/items/it-woodshop-spot")).json();
+    expect(detail.media[0]).toMatchObject({ caption: "作業台のある工房", credit: "サンプル木工房 公式サイト" });
+  });
+
+  it("保存済みの写真に説明がなければ補い、親が入れた説明は変えない", async () => {
+    const noCaption = { ...(await entry(0)), candidate: { ...candidate, caption: null } };
+    const [saved] = await run([{ entry: noCaption, bytes: PNG }], [0]);
+    await run([{ entry: await entry(0), bytes: PNG }], [0]);
+    const filled = await env.DB.prepare("SELECT caption FROM media WHERE id = ?").bind(saved!.media_id).first();
+    expect(filled).toEqual({ caption: "作業台のある工房" });
+    await env.DB.prepare("UPDATE media SET caption = '親の説明' WHERE id = ?").bind(saved!.media_id).run();
+    await run([{ entry: await entry(0), bytes: PNG }], [0]);
+    const kept = await env.DB.prepare("SELECT caption FROM media WHERE id = ?").bind(saved!.media_id).first();
+    expect(kept).toEqual({ caption: "親の説明" });
+  });
+
   it("同じ画像の再実行では重複して保存しない", async () => {
     await run([{ entry: await entry(0), bytes: PNG }], [0]);
     const again = await run([{ entry: await entry(0), bytes: PNG }], [0]);

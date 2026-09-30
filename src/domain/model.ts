@@ -161,6 +161,7 @@ export interface MediaRecord {
   kind: MediaKind;
   source_url: string | null;
   credit: string | null;
+  caption: string | null;
   license_note: string | null;
   content_type: string;
   byte_size: number;
