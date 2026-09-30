@@ -140,7 +140,7 @@ pnpm ops backup --target production                    # .local/backups/producti
 
 ## 注意点
 
-- `pnpm deploy` は pnpm の組み込みコマンドなので、`pnpm run deploy` を使う。
+- `pnpm deploy` は pnpm の組み込みコマンドなので、`pnpm run deploy` を使う。手元からのデプロイは「9. リリース」の例外のときだけ。
 - ローカルの D1 は `preview_database_id`（`0000…`）の鍵で保存している。`database_id`（本番）を変えてもローカルのデータは変わらない。
 - `--target production` はリモートバインディングで本番の D1・R2 に接続する。中継用のプレビュー Worker 名は `playland-cli-remote`
   （アプリ本体の `playland` は Worker 単位の Access でプレビューまで保護されているため、名前を分けている）。
@@ -164,3 +164,38 @@ pnpm ops backup --target production
 - 本番への書き込み（apply・geocode --apply・photos-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
   エージェントは preview の結果を親に見せ、承認を得てから `--confirm` を付ける。
 - 本番への接続は wrangler のリモートバインディング（`wrangler login` の認証）を使う。一時設定 `.wrangler-remote.tmp.json` は終了時に削除される。
+
+## 9. リリース（main へのマージ）
+
+コードの本番反映は、main へのマージで GitHub Actions（`.github/workflows/ci.yml`）が行う。
+
+- PR：typecheck・test・build。
+- main への push：同じ検査のあと、`pnpm db:migrate:remote` → `pnpm build` → `wrangler deploy`（`production` 環境、同時に 1 つだけ）。
+- マイグレーションはデプロイより先に当たる。列の追加など、古いコードのままでも動く変更にする（列の削除・改名は 2 回のリリースに分ける）。
+- 画面の確認はマージ前にローカルで行う（並行開発は README の「並行開発（ワークツリー）」）。プレビュー URL は本番の D1・R2 につながるので使わない。
+- データの取り込み・バックアップはコードのリリースではないので、これまでどおり手元から `--target production` で行う。
+
+### 準備（一度だけ）
+
+1. Cloudflare のダッシュボード → My Profile → API Tokens → Create Token で、テンプレート「Edit Cloudflare Workers」を選び、
+   権限に Account / D1 / Edit を足す。Account Resources はこのアカウントだけにする。
+2. アカウント ID を確認する：`npx wrangler whoami`
+3. GitHub に `production` 環境を作り、main からだけ使えるようにして、シークレットを入れる（リポジトリは公開なので環境に閉じ込める）。
+
+   ```bash
+   gh api -X PUT repos/nangashi/playland/environments/production \
+     -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true'
+   gh api -X POST repos/nangashi/playland/environments/production/deployment-branch-policies -f name=main -f type=branch
+   gh secret set CLOUDFLARE_API_TOKEN  --env production --repo nangashi/playland
+   gh secret set CLOUDFLARE_ACCOUNT_ID --env production --repo nangashi/playland
+   ```
+
+### CI が使えないとき
+
+```bash
+git switch main && git pull
+pnpm db:migrate:remote && pnpm run deploy
+```
+
+`pnpm run deploy` は、main にいて変更がなく（src・migrations は未追跡のファイルも含む）、origin/main と一致しているときだけ通る
+（`scripts/ops/release-guard.ts`）。

@@ -14,7 +14,8 @@
     "cf-typegen": "wrangler types --strict-vars=false src/server/worker-configuration.d.ts",
     "ingest": "node --import tsx scripts/ingest/cli.ts",
     "ops": "node --import tsx scripts/ops/cli.ts",
-    "deploy": "vite build && wrangler deploy",
+    "wt": "node --import tsx scripts/dev/worktree.ts",
+    "deploy": "node --import tsx scripts/ops/release-guard.ts && vite build && wrangler deploy",
     "db:migrate:remote": "wrangler d1 migrations apply playland --remote"
   },
   "dependencies": {
