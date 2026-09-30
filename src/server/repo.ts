@@ -125,7 +125,7 @@ export async function getActiveMedia(db: D1Database, id: string): Promise<MediaR
 // ---- 家族の保存 ----
 
 export async function listBookmarks(db: D1Database): Promise<BookmarkRecord[]> {
-  const { results } = await db.prepare(`SELECT item_id, created_at FROM bookmarks`).all<BookmarkRecord>();
+  const { results } = await db.prepare(`SELECT item_id, created_at, rank FROM bookmarks`).all<BookmarkRecord>();
   return results;
 }
 
@@ -133,12 +133,24 @@ export async function isBookmarked(db: D1Database, itemId: string): Promise<bool
   return (await db.prepare(`SELECT 1 AS ok FROM bookmarks WHERE item_id = ?`).bind(itemId).first()) !== null;
 }
 
-/** 何度呼んでも 1 件だけ残る（冪等） */
+/** 何度呼んでも 1 件だけ残る（冪等）。新しく保存したものはランキングの最後に入る */
 export async function addBookmark(db: D1Database, itemId: string, now: string) {
   await db
-    .prepare(`INSERT INTO bookmarks (item_id, created_at) VALUES (?, ?) ON CONFLICT (item_id) DO NOTHING`)
+    .prepare(
+      `INSERT INTO bookmarks (item_id, created_at, rank)
+       VALUES (?, ?, (SELECT COALESCE(MAX(rank), 0) + 1 FROM bookmarks))
+       ON CONFLICT (item_id) DO NOTHING`,
+    )
     .bind(itemId, now)
     .run();
+}
+
+/** 保存全体の順（上位から）で順位を振り直す（1 トランザクション） */
+export async function setBookmarkOrder(db: D1Database, itemIds: readonly string[]) {
+  if (itemIds.length === 0) return;
+  await db.batch(
+    itemIds.map((id, i) => db.prepare(`UPDATE bookmarks SET rank = ? WHERE item_id = ?`).bind(i + 1, id)),
+  );
 }
 
 /** 存在しなくても成功扱い（冪等） */

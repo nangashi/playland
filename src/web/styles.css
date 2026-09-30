@@ -107,7 +107,31 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.main-tabs {
+  display: flex;
+  margin-right: auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.main-tab {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.main-tab.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
 }
 
 .app-title {
@@ -319,6 +343,7 @@ a {
 }
 
 .card-thumb {
+  position: relative;
   width: 88px;
   height: 88px;
   border-radius: 6px;
@@ -1257,4 +1282,140 @@ button.link-button {
   top: 4px;
   background: var(--surface);
   font-size: 12px;
+}
+
+/* ---- ランキング ---- */
+.ranking-lead {
+  margin: 0 2px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ranking-message.is-error {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.ranking-list {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ranking-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 6px;
+}
+
+.ranking-row.is-top > .card {
+  border-color: color-mix(in srgb, var(--save) 55%, var(--border));
+}
+
+.rank-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+}
+
+.rank-badge.rank-1,
+.rank-badge.rank-2,
+.rank-badge.rank-3 {
+  min-width: 28px;
+  height: 28px;
+  font-size: 15px;
+  line-height: 28px;
+  background: var(--save);
+  color: #1f1400;
+}
+
+.ranking-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank-button {
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rank-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* つまみの上だけスクロールを止めてドラッグにする */
+.drag-handle {
+  flex: 1;
+  min-height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 20px;
+  touch-action: none;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drag-handle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ranking-list.is-dragging {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ranking-list.is-dragging .ranking-row {
+  transition: transform 150ms ease;
+}
+
+.ranking-list.is-dragging .ranking-row.is-dragged {
+  position: relative;
+  z-index: 2;
+  transition: none;
+}
+
+.ranking-row.is-dragged > .card {
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.18);
+}
+
+.ranking-row.is-dragged .drag-handle {
+  cursor: grabbing;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.ranking-out {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  writing-mode: vertical-rl;
+  margin: 0 auto;
 }

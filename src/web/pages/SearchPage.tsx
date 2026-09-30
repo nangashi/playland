@@ -4,6 +4,7 @@ import type { ItemCard as ItemCardData, MapItemsResponse } from "../../domain/ap
 import { fetchItems, fetchMapItems, fetchSettings } from "../api";
 import { FilterBar } from "../components/FilterBar";
 import { ItemCard } from "../components/ItemCard";
+import { MainTabs } from "../components/MainTabs";
 import {
   activeConditions,
   CLEARED,
@@ -73,6 +74,7 @@ export function SearchPage() {
     <main className="page">
       <header className="topbar">
         <h1 className="app-title">おでかけ候補</h1>
+        <MainTabs />
         <Link to="/admin" className="topbar-link">
           管理
         </Link>

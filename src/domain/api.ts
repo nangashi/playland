@@ -57,6 +57,11 @@ export interface ItemListResponse {
   offset: number;
 }
 
+/** 保存したものの家族ランキング（上位から） */
+export interface RankingResponse {
+  items: ItemCard[];
+}
+
 /** 地図の 1 つの場所。同じ場所の候補をまとめる */
 export interface MapVenue {
   place: {

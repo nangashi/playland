@@ -16,6 +16,7 @@ import type {
   ItemListResponse,
   MapItemsResponse,
   PublicSettingsResponse,
+  RankingResponse,
 } from "../domain/api";
 
 export class ApiError extends Error {
@@ -69,6 +70,16 @@ export function fetchItem(id: string, signal?: AbortSignal) {
 /** 家族で共有する保存 */
 export function setBookmark(itemId: string, saved: boolean) {
   return request<void>(`/api/bookmarks/${encodeURIComponent(itemId)}`, { method: saved ? "PUT" : "DELETE" });
+}
+
+/** 保存したものの家族ランキング */
+export function fetchRanking(signal?: AbortSignal) {
+  return request<RankingResponse>("/api/ranking", { signal });
+}
+
+/** ランキングに出ている候補すべてを新しい順で送る。別の端末で変わっていれば 409 */
+export function saveRanking(itemIds: readonly string[]) {
+  return request<void>("/api/ranking", json("PUT", { item_ids: itemIds }));
 }
 
 /** 家族で「興味なし」にする／戻す */

@@ -10,6 +10,7 @@ import { AdminPlacePage, adminPlaceLoader } from "./pages/admin/AdminPlacePage";
 import { AdminSettingsPage, adminSettingsLoader } from "./pages/admin/AdminSettingsPage";
 import { ErrorPage } from "./pages/ErrorPage";
 import { ItemPage, itemLoader } from "./pages/ItemPage";
+import { RankingPage, rankingLoader } from "./pages/RankingPage";
 import { SearchPage, searchLoader } from "./pages/SearchPage";
 import "./styles.css";
 
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       // 以前のプロフィール選択画面の URL
       { path: "/profiles", loader: () => redirect("/search") },
       { path: "/search", element: <SearchPage />, loader: searchLoader },
+      { path: "/ranking", element: <RankingPage />, loader: rankingLoader },
       { path: "/items/:id", element: <ItemPage />, loader: itemLoader },
       { path: "/admin/login", element: <AdminLoginPage /> },
       { path: "/admin", element: <AdminHomePage />, loader: adminHomeLoader },
