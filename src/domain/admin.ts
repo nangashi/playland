@@ -223,3 +223,20 @@ export type ItemCreateInput = z.input<typeof itemCreateSchema>;
 export type PlacePatchInput = z.input<typeof placePatchSchema>;
 export type TransportPatchInput = z.input<typeof transportPatchSchema>;
 export type SettingsPatchInput = z.input<typeof settingsPatchSchema>;
+
+/**
+ * 承認待ちの候補への親の判断。publish=公開 / reject=見送り（非表示）/ photos=写真だけ確定（公開済みの候補）。
+ * accept_media_ids に入れた採用待ちの写真を表示し、入れなかった採用待ちの写真は消す（見送りではすべて消す）
+ */
+export const inboxDecisionSchema = z
+  .object({
+    version: z.number().int().min(1),
+    decision: z.enum(["publish", "reject", "photos"]),
+    accept_media_ids: z
+      .array(idSchema)
+      .max(50)
+      .transform((ids) => [...new Set(ids)])
+      .default([]),
+  })
+  .strict();
+export type InboxDecisionInput = z.input<typeof inboxDecisionSchema>;

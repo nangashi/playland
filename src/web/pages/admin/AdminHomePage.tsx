@@ -1,16 +1,16 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
-import { createItem, endAdminSession, fetchAdminPlaces } from "../../api";
+import { createItem, endAdminSession, fetchAdminInbox, fetchAdminPlaces } from "../../api";
 import { AdminFrame, requireParentSession, SaveMessage, useSave } from "./common";
 
 export async function adminHomeLoader(args: LoaderFunctionArgs) {
   const session = await requireParentSession(args);
-  const { places } = await fetchAdminPlaces(args.request.signal);
-  return { session, places };
+  const [{ places }, inbox] = await Promise.all([fetchAdminPlaces(args.request.signal), fetchAdminInbox(args.request.signal)]);
+  return { session, places, inboxCount: inbox.entries.length };
 }
 
 export function AdminHomePage() {
-  const { session, places } = useLoaderData<typeof adminHomeLoader>();
+  const { session, places, inboxCount } = useLoaderData<typeof adminHomeLoader>();
   const navigate = useNavigate();
   const { status, run } = useSave();
   const [title, setTitle] = useState("");
@@ -44,6 +44,9 @@ export function AdminHomePage() {
         親の確認は {session.expires_at ? new Date(session.expires_at).toLocaleTimeString("ja-JP") : "-"} まで有効です。
       </p>
       <div className="admin-menu">
+        <Link className={inboxCount > 0 ? "link-button" : "secondary-button"} to="/admin/inbox">
+          承認待ち（{inboxCount} 件）
+        </Link>
         <Link className="secondary-button" to="/admin/settings">
           家族の設定（出発地・自転車の上限）
         </Link>

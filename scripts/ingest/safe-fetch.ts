@@ -1,3 +1,4 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { MAX_IMAGE_BYTES, sniffImageType, type ImageContentType } from "../../src/domain/image";
 import { checkFetchUrl, isPublicAddress } from "../../src/ingest/netguard";
@@ -5,10 +6,25 @@ import { checkFetchUrl, isPublicAddress } from "../../src/ingest/netguard";
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 20_000;
 
-/** 名前解決の結果がすべて公開アドレスであることを確かめる */
+/** 通信を HTTPS プロキシ経由で行う環境か（Claude Code のサンドボックスなど） */
+function viaHttpsProxy(): boolean {
+  return Boolean(process.env.HTTPS_PROXY || process.env.https_proxy);
+}
+
+/**
+ * 名前解決の結果がすべて公開アドレスであることを確かめる。
+ * プロキシ経由で、手元では名前解決できない環境（EAI_AGAIN）に限り、宛先の確認をプロキシに任せる
+ * （URL の検査・リダイレクト先の再検査・サイズと形式の確認は変わらず行う）。
+ */
 async function assertPublicHost(hostname: string) {
   const host = hostname.replace(/^\[|\]$/g, "");
-  const addrs = await lookup(host, { all: true, verbatim: true });
+  let addrs: LookupAddress[];
+  try {
+    addrs = await lookup(host, { all: true, verbatim: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EAI_AGAIN" && viaHttpsProxy()) return;
+    throw err;
+  }
   if (addrs.length === 0) throw new Error("名前解決できません");
   const bad = addrs.find((a) => !isPublicAddress(a.address));
   if (bad) throw new Error(`内部アドレス（${bad.address}）へは取得しません`);

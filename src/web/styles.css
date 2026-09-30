@@ -1411,3 +1411,108 @@ button.link-button {
   writing-mode: vertical-rl;
   margin: 0 auto;
 }
+
+/* 承認待ち */
+.inbox-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.inbox-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inbox-head .section-title {
+  margin: 0;
+}
+
+.inbox-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.inbox-facts {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.inbox-review {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--surface-2);
+  font-size: 14px;
+}
+
+.inbox-review ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
+.inbox-evidence {
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.inbox-evidence ul {
+  padding-left: 20px;
+}
+
+.inbox-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.inbox-photo {
+  position: relative;
+  display: block;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface-2);
+}
+
+.inbox-photo.is-on {
+  border-color: var(--accent);
+}
+
+.inbox-photo input {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+}
+
+.inbox-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.inbox-photo:not(.is-on) img {
+  opacity: 0.45;
+}
+
+.inbox-photo-caption {
+  display: block;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.inbox-actions {
+  align-items: center;
+}

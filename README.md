@@ -51,15 +51,20 @@ git worktree remove ../playland.worktrees/feat-<名前>   # 片付け（コピ�
 LLM（コードエージェント）が候補を調べて登録用 JSON を作り、固定コードが検証・照合・登録する。手順の原本は
 [skills/collect-outings/SKILL.md](skills/collect-outings/SKILL.md)。収集元は `config/sources.yaml`、タグは `src/domain/tags.ts`。
 
+候補は **下書き**、写真は **採用待ち** で登録され、家族の画面には出ない。親は管理画面の「承認待ち」（`/admin/inbox`）で
+内容・根拠・確認してほしい点・写真を見て、写真を選んで「公開する」か「見送る」を押す（見送った候補は非表示で残り、再び取り込まれない）。
+コマンドの実行はエージェントが行い、親は承認待ちの URL を開くだけにする。
+
 ```bash
 pnpm ingest export-known --target local              # 照合用の既存データ（家族の情報は含めない）
 pnpm ingest validate .local/ingest/<batch>.json      # 形式・根拠・整合（DB を見ない）
+pnpm ingest run      .local/ingest/<batch>.json --target local [--photos .local/ingest/<photos>.json]
+                                                     # 下書きで登録→座標→距離→写真を採用待ちで保存（通常はこれだけ）
 pnpm ingest preview  .local/ingest/<batch>.json --target local
-pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3]
+pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3|all]   # 下書きで登録だけ
 pnpm ingest geocode --target local [--apply]         # 住所から座標（国土地理院 住所検索・おおよその位置）
 pnpm ingest distances --target local                 # すべての場所の自宅からの距離を計算し直す（既存データの補完）
-pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真候補を取得し確認ページを作る
-pnpm ingest photos-apply .local/ingest/<photos>.json --target local --accept 0,3
+pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真を取得して採用待ちで保存
 pnpm ingest enrich-export --target local [--all]                  # 空欄の残る候補（既定は管理画面で追加した候補）
 pnpm ingest enrich-preview .local/ingest/<enrich>.json --target local
 pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0,2|all
@@ -67,9 +72,10 @@ pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0
 
 - 補足（enrich）は、既存の候補の空欄（unknown・null・未判定のタグ・場所の住所）だけを埋める。値の入った項目は変えず、
   書き出したときの版と一致する候補だけを更新する。親の確認日時は変えず、根拠は出典（`source_entries`）に残す。
-  写真のない候補も書き出し、写真リストでは出典キーの代わりに `item_id` で候補を指定できる（取得・確認・保存は photos-fetch / photos-apply）。
+  写真のない候補も書き出し、写真リストでは出典キーの代わりに `item_id` で候補を指定できる（取得と採用待ちでの保存は photos-fetch）。
 
-- 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に保存する。親が確認ページで採用したものだけを保存する。
+- 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に「採用待ち」で保存する。
+  親が承認待ちの画面で採用したものだけを表示し、採用しなかったものは消す。
 - 画像の取得は https のみ・内部アドレス拒否（名前解決後に確認）・リダイレクト先も再検査・5MB まで・実際の内容で形式を判定。
 - 座標は、住所があり座標がなく親が指定していない場所だけを埋める。親が地図で直した位置は上書きしない。
 

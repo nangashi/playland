@@ -1,4 +1,5 @@
 import type {
+  InboxDecisionInput,
   ItemCreateInput,
   ItemPatchInput,
   PlacePatchInput,
@@ -6,6 +7,7 @@ import type {
   TransportPatchInput,
 } from "../domain/admin";
 import type {
+  AdminInboxResponse,
   AdminItemResponse,
   AdminPlaceListResponse,
   AdminPlaceResponse,
@@ -146,4 +148,17 @@ export function uploadMedia(form: FormData) {
 
 export function setMediaStatus(id: string, status: "active" | "hidden") {
   return request<void>(`/api/admin/media/${encodeURIComponent(id)}`, json("PATCH", { status }));
+}
+
+/** 親の画面用の写真の URL（非表示・採用待ちも表示できる） */
+export function adminMediaUrl(id: string) {
+  return `/api/admin/media/${encodeURIComponent(id)}/file`;
+}
+
+export function fetchAdminInbox(signal?: AbortSignal) {
+  return request<AdminInboxResponse>("/api/admin/inbox", { signal });
+}
+
+export function decideInbox(id: string, input: InboxDecisionInput) {
+  return request<{ id: string; version: number }>(`/api/admin/inbox/${encodeURIComponent(id)}`, json("POST", input));
 }
