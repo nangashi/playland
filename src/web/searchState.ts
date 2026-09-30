@@ -1,5 +1,7 @@
 import { transportModes, type TransportMode } from "../domain/model";
+import { tripLabel } from "../domain/labels";
 import { DEFAULT_PAGE_SIZE } from "../domain/search";
+import { tripKinds, type TripKind } from "../domain/trip";
 import { CATEGORIES, getCategory } from "../domain/tags";
 
 /**
@@ -17,6 +19,8 @@ export interface SearchState {
   age: number | null;
   modes: TransportMode[];
   maxMinutes: number | null;
+  /** 自宅からの距離で分けた日帰り・旅行 */
+  trip: TripKind | null;
   includeUnknown: boolean;
   /** 家族で「興味なし」にしたものも表示する */
   includeHidden: boolean;
@@ -37,6 +41,7 @@ export function readSearchState(params: URLSearchParams): SearchState {
   const age = int("age");
   const max = int("max");
   const pages = int("pages") ?? 1;
+  const trip = params.get("trip");
   return {
     view: params.get("view") === "map" ? "map" : "list",
     category: cat && getCategory(cat) ? cat : null,
@@ -45,6 +50,7 @@ export function readSearchState(params: URLSearchParams): SearchState {
     age: age !== null && age >= 0 && age <= 18 ? age : null,
     modes: list("modes").filter((m): m is TransportMode => (transportModes as readonly string[]).includes(m)),
     maxMinutes: max !== null && max > 0 ? max : null,
+    trip: (tripKinds as readonly (string | null)[]).includes(trip) ? (trip as TripKind) : null,
     includeUnknown: params.get("unknown") === "1",
     includeHidden: params.get("hidden") === "1",
     pages: Math.min(Math.max(pages, 1), MAX_PAGES),
@@ -60,6 +66,7 @@ export function writeSearchState(state: SearchState): URLSearchParams {
   if (state.age !== null) p.set("age", String(state.age));
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max", String(state.maxMinutes));
+  if (state.trip) p.set("trip", state.trip);
   if (state.includeUnknown) p.set("unknown", "1");
   if (state.includeHidden) p.set("hidden", "1");
   if (state.view === "list" && state.pages > 1) p.set("pages", String(state.pages));
@@ -80,6 +87,7 @@ export function toApiParams(state: SearchState, page: number): URLSearchParams {
   if (state.age !== null) p.set("age", String(state.age));
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max_minutes", String(state.maxMinutes));
+  if (state.trip) p.set("trip", state.trip);
   return p;
 }
 
@@ -112,6 +120,7 @@ export function activeConditions(state: SearchState): ActiveCondition[] {
   if (state.modes.length > 0 || state.maxMinutes !== null) {
     out.push({ label: "移動", reset: { modes: [], maxMinutes: null } });
   }
+  if (state.trip) out.push({ label: tripLabel[state.trip], reset: { trip: null } });
   return out;
 }
 
@@ -122,6 +131,7 @@ export const CLEARED: Partial<SearchState> = {
   age: null,
   modes: [],
   maxMinutes: null,
+  trip: null,
   includeUnknown: false,
   includeHidden: false,
 };

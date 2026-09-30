@@ -6,19 +6,21 @@ import {
   type HiddenRecord,
   type ItemRecord,
   type ItemTagRecord,
+  type PlaceRecord,
   type TransportMode,
   type TransportPreferenceRecord,
   type TravelEstimateRecord,
 } from "./model";
 import { getCategory, getTag } from "./tags";
 import { buildModeViews, travelFit, type ModeView, type TransportSettings } from "./transport";
+import { tripKindOf, tripKinds, type TripKind } from "./trip";
 
 /** ok=雨でもできる根拠があるものだけ */
 export const rainFilters = ["any", "ok"] as const;
 export type RainFilter = (typeof rainFilters)[number];
 
 /** 不明のため条件に一致と判断できなかった項目 */
-export const unknownReasons = ["category", "rain", "age", "travel"] as const;
+export const unknownReasons = ["category", "rain", "age", "travel", "trip"] as const;
 export type UnknownReason = (typeof unknownReasons)[number];
 
 export const DEFAULT_PAGE_SIZE = 30;
@@ -43,6 +45,8 @@ export const searchQuerySchema = z.object({
   age: z.coerce.number().int().min(0).max(18).optional(),
   modes: modesParam.optional(),
   max_minutes: z.coerce.number().int().min(1).max(600).optional(),
+  /** 自宅からの距離で分けた日帰り・旅行 */
+  trip: z.enum(tripKinds).optional(),
   include_unknown: boolParam.default(false),
   /** 家族で「興味なし」にしたものも表示する */
   include_hidden: boolParam.default(false),
@@ -60,6 +64,7 @@ const QUERY_KEYS = [
   "age",
   "modes",
   "max_minutes",
+  "trip",
   "include_unknown",
   "include_hidden",
   "limit",
@@ -83,6 +88,8 @@ export interface SearchData {
   preferences: readonly TransportPreferenceRecord[];
   estimates: readonly TravelEstimateRecord[];
   settings: TransportSettings;
+  /** 日帰り・旅行の判定に使う（場所に保存した自宅からの距離） */
+  places: readonly Pick<PlaceRecord, "id" | "home_distance_km">[];
 }
 
 export interface SearchEntry {
@@ -97,6 +104,8 @@ export interface SearchEntry {
   travel: ModeView[] | null;
   /** 移動条件で絞ったときに一致した手段 */
   matched_modes: TransportMode[] | null;
+  /** 自宅からの距離で分けた日帰り・旅行。座標がなければ null */
+  trip: TripKind | null;
 }
 
 export interface SearchResult {
@@ -125,6 +134,7 @@ export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEn
   const saved = new Set(data.bookmarks.map((b) => b.item_id));
   const hidden = new Set(data.hidden.map((h) => h.item_id));
   const tagsByItem = groupBy(data.itemTags, (t) => t.item_id);
+  const places = new Map(data.places.map((p) => [p.id, p]));
   const category = query.category ? getCategory(query.category) : undefined;
   const travelModes =
     query.modes || query.max_minutes !== undefined ? new Set(query.modes ?? transportModes) : null;
@@ -166,6 +176,12 @@ export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEn
       matchedModes = fit.matched_modes;
     }
 
+    const trip = item.place_id ? tripKindOf(places.get(item.place_id)?.home_distance_km) : null;
+    if (query.trip) {
+      if (trip === null) unknown.push("trip");
+      else if (trip !== query.trip) continue;
+    }
+
     if (unknown.length > 0 && !query.include_unknown) continue;
     entries.push({
       item,
@@ -175,6 +191,7 @@ export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEn
       unknown,
       travel,
       matched_modes: matchedModes,
+      trip,
     });
   }
 

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { ItemCard as ItemCardData } from "../../domain/api";
-import { rainLabel, unknownReasonLabel } from "../../domain/labels";
+import { rainLabel, tripLabel, unknownReasonLabel } from "../../domain/labels";
 import { HideButton } from "./HideButton";
 import { Photo } from "./Photo";
 import { SaveButton } from "./SaveButton";
@@ -21,7 +21,7 @@ export function ItemCard({ item, onSavedChange, onHiddenChange, badge }: Props) 
     item.rain_policy === "ok" ? { text: rainLabel.ok, tone: "ok" } : null,
     item.reservation_requirement === "required" ? { text: "要予約", tone: "warn" } : null,
     item.price_status === "free" ? { text: "無料", tone: "plain" } : null,
-    item.age_min_kind === "value" ? { text: `${item.age_min}歳〜`, tone: "plain" } : null,
+    item.trip ? { text: tripLabel[item.trip], tone: "plain" } : null,
   ].filter((f): f is { text: string; tone: string } => f !== null);
 
   return (

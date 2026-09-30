@@ -20,6 +20,7 @@ import {
   type SearchEntry,
 } from "../domain/search";
 import { buildModeViews } from "../domain/transport";
+import { tripKindOf } from "../domain/trip";
 import * as repo from "./repo";
 import type { AppEnv } from "./types";
 
@@ -41,13 +42,9 @@ publicApi.get("/items", async (c) => {
   const query = parsed.data;
 
   const db = c.env.DB;
-  const [data, places, media] = await Promise.all([
-    loadSearchData(db),
-    repo.listPlaces(db),
-    repo.listActiveMedia(db),
-  ]);
+  const [data, media] = await Promise.all([loadSearchData(db), repo.listActiveMedia(db)]);
   const result = searchItems(data, query);
-  const placeMap = new Map(places.map((p) => [p.id, p]));
+  const placeMap = new Map(data.places.map((p) => [p.id, p]));
   const covers = coverIndex(media);
   const body: ItemListResponse = {
     items: result.entries.map((e) => toCard(e, placeMap, covers)),
@@ -66,13 +63,9 @@ publicApi.get("/map-items", async (c) => {
   const parsed = parseSearchQuery(new URL(c.req.url).searchParams);
   if (!parsed.success) return c.json({ error: "invalid query" }, 400);
   const db = c.env.DB;
-  const [data, places, media] = await Promise.all([
-    loadSearchData(db),
-    repo.listPlaces(db),
-    repo.listActiveMedia(db),
-  ]);
+  const [data, media] = await Promise.all([loadSearchData(db), repo.listActiveMedia(db)]);
   const entries = searchAllEntries(data, parsed.data);
-  const placeMap = new Map(places.map((p) => [p.id, p]));
+  const placeMap = new Map(data.places.map((p) => [p.id, p]));
   const covers = coverIndex(media);
   const groups = buildVenueGroups(entries, placeMap);
   const body: MapItemsResponse = {
@@ -119,6 +112,7 @@ publicApi.get("/items/:id", async (c) => {
     unknown: [],
     travel: item.place_id ? buildModeViews(item.place_id, preferences, estimates, settings) : null,
     matched_modes: null,
+    trip: tripKindOf(place?.home_distance_km),
   };
   const placeMap = new Map(place ? [[place.id, place]] : []);
   const card = toCard(entry, placeMap, coverIndex(media));
@@ -182,8 +176,8 @@ publicApi.delete("/bookmarks/:itemId", async (c) => {
 /** 保存したものの家族ランキング。並べ替えは保存と同じく誰でもできる */
 publicApi.get("/ranking", async (c) => {
   const db = c.env.DB;
-  const [data, places, media] = await Promise.all([loadSearchData(db), repo.listPlaces(db), repo.listActiveMedia(db)]);
-  const placeMap = new Map(places.map((p) => [p.id, p]));
+  const [data, media] = await Promise.all([loadSearchData(db), repo.listActiveMedia(db)]);
+  const placeMap = new Map(data.places.map((p) => [p.id, p]));
   const covers = coverIndex(media);
   const body: RankingResponse = { items: rankingEntries(data).map((e) => toCard(e, placeMap, covers)) };
   return c.json(body);
@@ -233,8 +227,8 @@ async function getListedItem(db: D1Database, id: string): Promise<ItemRecord | n
   return item?.kind === "spot" ? item : null;
 }
 
-export async function loadSearchData(db: D1Database): Promise<SearchData> {
-  const [items, itemTags, bookmarks, hidden, preferences, estimates, settings] = await Promise.all([
+export async function loadSearchData(db: D1Database): Promise<Omit<SearchData, "places"> & { places: PlaceRecord[] }> {
+  const [items, itemTags, bookmarks, hidden, preferences, estimates, settings, places] = await Promise.all([
     repo.listPublishedItems(db),
     repo.listItemTags(db),
     repo.listBookmarks(db),
@@ -242,8 +236,9 @@ export async function loadSearchData(db: D1Database): Promise<SearchData> {
     repo.listTransportPreferences(db),
     repo.listTravelEstimates(db),
     repo.getSettings(db),
+    repo.listPlaces(db),
   ]);
-  return { items, itemTags, bookmarks, hidden, preferences, estimates, settings };
+  return { items, itemTags, bookmarks, hidden, preferences, estimates, settings, places };
 }
 
 interface CoverIndex {
@@ -278,9 +273,8 @@ function toCard(entry: SearchEntry, places: Map<string, PlaceRecord>, covers: Co
     unknown: entry.unknown,
     travel: entry.travel,
     matched_modes: entry.matched_modes,
+    trip: entry.trip,
     cover: covers.byItem.get(item.id) ?? (item.place_id ? covers.byPlace.get(item.place_id) : undefined) ?? null,
-    age_min_kind: item.age_min_kind,
-    age_min: item.age_min,
     reservation_requirement: item.reservation_requirement,
     price_status: item.price_status,
   };

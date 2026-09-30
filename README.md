@@ -57,6 +57,7 @@ pnpm ingest validate .local/ingest/<batch>.json      # 形式・根拠・整合�
 pnpm ingest preview  .local/ingest/<batch>.json --target local
 pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3]
 pnpm ingest geocode --target local [--apply]         # 住所から座標（国土地理院 住所検索・おおよその位置）
+pnpm ingest distances --target local                 # すべての場所の自宅からの距離を計算し直す（既存データの補完）
 pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真候補を取得し確認ページを作る
 pnpm ingest photos-apply .local/ingest/<photos>.json --target local --accept 0,3
 ```
@@ -90,7 +91,10 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 - 親の編集は版番号付き。古い版での保存は 409 で拒否し、何も書き換えない。
 - 所要時間は出発地の版・手段・取得元（manual / api）ごとに保存し、親の値を優先する。出発地を変えると古い値は使わない。
 - 保存したものは「ランキング」画面で家族共有の順に並べ替えられる（誰でも可。非公開・興味なしは外し、順位は残す。新しく保存したものは最後）。
-- 絞り込みは「カテゴリ（1 つ選ぶ。含まれるタグのどれかに当てはまれば一致）」と「条件（保存済み・雨の日でも遊べる・年齢・移動）」の 2 段。
+- 絞り込みは「カテゴリ（1 つ選ぶ。含まれるタグのどれかに当てはまれば一致）」と「条件（保存済み・雨の日でも遊べる・年齢・移動・日帰り／旅行）」の 2 段。
+- 日帰り／旅行は、自宅から場所までの直線距離で分ける（100km 以内が日帰り。`src/domain/trip.ts`）。
+  距離は場所ごとに保存する（`places.home_distance_km`）。取り込みで場所を登録したとき・住所検索や親のピン修正で座標が変わったとき・
+  管理画面で自宅を保存したときに計算する。自宅の座標は Git に置かず、管理画面の設定（DB）だけに持つ。座標がなければ不明として扱う。
 - 家族で「興味なし」にした候補は、「興味なしも表示」を選んだときだけ一覧・地図に出る。
 - 地図は一覧と同じ検索条件・検索関数を使い（`GET /api/map-items`、ページ分割なし・最大 500 か所）、同じ場所の候補を 1 つのマーカーにまとめる。
   座標のない候補は地図から消さず「ちずに だせない ○けん」と表示する。背景地図の設定は `src/web/map/tiles.ts` だけで差し替えられる。

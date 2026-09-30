@@ -79,6 +79,7 @@ export function data(overrides: Partial<SearchData> = {}): SearchData {
     preferences: [],
     estimates: [],
     settings: { origin_version: 1, bicycle_max_minutes: 20 },
+    places: [],
     ...overrides,
   };
 }

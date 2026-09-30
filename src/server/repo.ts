@@ -9,6 +9,7 @@ import type {
   TransportPreferenceRecord,
   TravelEstimateRecord,
 } from "../domain/model";
+import { homeDistanceKm, originOf, type LatLng } from "../domain/trip";
 
 /**
  * D1 の読み取りはここに集約し、必ずパラメーター化する。
@@ -22,7 +23,7 @@ export const ITEM_COLUMNS = `id, kind, place_id, title, child_description, rain_
   price_status, price_text, initialized_at, parent_reviewed_at, version, created_at, updated_at`;
 
 const PLACE_COLUMNS = `id, name, address_text, latitude, longitude, position_accuracy,
-  google_place_id, google_maps_url, position_source, position_note, version`;
+  google_place_id, google_maps_url, position_source, position_note, home_distance_km, version`;
 
 const MEDIA_COLUMNS = `id, r2_key, item_id, place_id, kind, source_url, credit, caption, license_note,
   content_type, byte_size, status, sort_order, created_at`;
@@ -88,6 +89,34 @@ export async function getSettings(db: D1Database): Promise<FamilySettingsRecord>
     .first<FamilySettingsRecord>();
   if (!row) throw new Error("family_settings row is missing");
   return row;
+}
+
+/** 自宅の座標（場所の距離の計算用。画面には返さない） */
+export async function getOrigin(db: D1Database): Promise<LatLng | null> {
+  return originOf(await getSettings(db));
+}
+
+/**
+ * すべての場所について、自宅からの距離を計算し直して保存する（自宅を変えたとき・既存データの補完）。
+ * 座標から決まる値なので、場所の版・更新日時は変えない。変わった場所の数を返す。
+ */
+export async function refreshHomeDistances(db: D1Database): Promise<number> {
+  const origin = await getOrigin(db);
+  const { results } = await db
+    .prepare(`SELECT id, latitude, longitude, home_distance_km FROM places`)
+    .all<Pick<PlaceRecord, "id" | "latitude" | "longitude" | "home_distance_km">>();
+  const stmts = results.flatMap((p) => {
+    const km = homeDistanceKm(p, origin);
+    if (km === p.home_distance_km) return [];
+    // 計算中に座標が変わっていたら書かない（その変更の側で計算する）
+    return [
+      db
+        .prepare(`UPDATE places SET home_distance_km = ? WHERE id = ? AND latitude IS ? AND longitude IS ?`)
+        .bind(km, p.id, p.latitude, p.longitude),
+    ];
+  });
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+  return stmts.length;
 }
 
 /** 表示中の写真（候補・場所ごとに並び順どおり） */

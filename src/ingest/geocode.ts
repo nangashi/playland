@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { homeDistanceKm } from "../domain/trip";
+import { getOrigin } from "../server/repo";
 
 /**
  * 住所から座標を取得する（住所検索サービスの結果を使う。LLM に座標を推測させない）。
@@ -131,6 +133,7 @@ export async function geocodePlaces(db: D1Database, geocoder: Geocoder, options:
     .bind(options.limit ?? 100)
     .all<{ id: string; name: string; address_text: string }>();
 
+  const origin = options.apply ? await getOrigin(db) : null;
   const outcomes: GeocodeOutcome[] = [];
   for (const [i, place] of results.entries()) {
     if (i > 0 && options.delayMs) await new Promise((r) => setTimeout(r, options.delayMs));
@@ -161,11 +164,18 @@ export async function geocodePlaces(db: D1Database, geocoder: Geocoder, options:
       const res = await db
         .prepare(
           `UPDATE places
-              SET latitude = ?, longitude = ?, position_accuracy = 'approximate',
+              SET latitude = ?, longitude = ?, position_accuracy = 'approximate', home_distance_km = ?,
                   position_source = 'geocoder', position_note = ?, updated_at = ?, version = version + 1
             WHERE id = ? AND latitude IS NULL AND position_source IS NULL`,
         )
-        .bind(picked.latitude, picked.longitude, `国土地理院 住所検索: ${picked.title}`, now().toISOString(), place.id)
+        .bind(
+          picked.latitude,
+          picked.longitude,
+          homeDistanceKm(picked, origin),
+          `国土地理院 住所検索: ${picked.title}`,
+          now().toISOString(),
+          place.id,
+        )
         .run();
       applied = (res.meta.changes ?? 0) > 0;
     }

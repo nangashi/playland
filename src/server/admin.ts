@@ -23,6 +23,7 @@ import type {
 } from "../domain/api";
 import { sha256Hex, sniffImageType } from "../domain/image";
 import { idSchema } from "../domain/model";
+import { homeDistanceKm } from "../domain/trip";
 import { endSession, identityKey, readSession, requireParent, verifyPinAndStartSession } from "./parent";
 import * as repo from "./repo";
 import type { AppEnv } from "./types";
@@ -223,9 +224,10 @@ adminApi.patch("/places/:id", async (c) => {
       values.push(patch[col]);
     }
   }
-  // 親が座標を指定・消去したら、以後の住所検索で上書きしない
+  // 親が座標を指定・消去したら、以後の住所検索で上書きしない。自宅からの距離も計算し直す
   if (patch.latitude !== undefined) {
-    sets.push("position_source = 'parent'", "position_note = NULL");
+    sets.push("position_source = 'parent'", "position_note = NULL", "home_distance_km = ?");
+    values.push(homeDistanceKm({ latitude: patch.latitude, longitude: patch.longitude ?? null }, await repo.getOrigin(db)));
   }
   const guard = `EXISTS (SELECT 1 FROM places WHERE id = ? AND version = ?)`;
   const changed = Object.keys(input).filter((k) => k !== "version");
@@ -378,6 +380,8 @@ adminApi.patch("/settings", async (c) => {
   });
   if (res) return res;
   if ((results.at(-1)?.meta.changes ?? 0) === 0) return conflict(c, (await repo.getSettings(db)).version);
+  // 自宅が変わったら、日帰り・旅行の判定に使う場所ごとの距離を計算し直す
+  if (input.origin_latitude !== undefined) await repo.refreshHomeDistances(db);
   const body: AdminSettingsResponse = await repo.getSettings(db);
   return c.json(body);
 });

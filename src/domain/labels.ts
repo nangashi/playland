@@ -9,6 +9,7 @@ import type {
   TransportMode,
 } from "./model";
 import type { UnknownReason } from "./search";
+import type { TripKind } from "./trip";
 
 /** 画面の表記。内部の値と画面の表現を分ける */
 
@@ -36,6 +37,12 @@ export const unknownReasonLabel: Record<UnknownReason, string> = {
   rain: "雨天対応",
   age: "対象年齢",
   travel: "移動時間",
+  trip: "距離",
+};
+
+export const tripLabel: Record<TripKind, string> = {
+  day_trip: "日帰り",
+  trip: "旅行",
 };
 
 /** 写真が施設そのものか、過去の様子か、イメージかを区別する */

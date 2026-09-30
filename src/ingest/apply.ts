@@ -1,3 +1,5 @@
+import { homeDistanceKm, type LatLng } from "../domain/trip";
+import { getOrigin } from "../server/repo";
 import { validateBundle, type Bundle, type Candidate } from "./bundle";
 import { loadKnown } from "./known";
 import { matchCandidates, type MatchResult, type PlaceResolution } from "./match";
@@ -28,6 +30,8 @@ export function planCandidate(
   ids: PlanIds,
   batchId: string,
   now: string,
+  /** 自宅の座標（新しい場所の距離を登録時に保存する）。未設定なら null */
+  origin: LatLng | null = null,
 ): PlannedStatement[] {
   const stmts: PlannedStatement[] = [];
   const { item, source } = candidate;
@@ -41,8 +45,8 @@ export function planCandidate(
     const p = candidate.place;
     stmts.push({
       sql: `INSERT INTO places (id, name, address_text, latitude, longitude, position_accuracy,
-                                position_source, google_maps_url, initialized_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                position_source, google_maps_url, home_distance_km, initialized_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
         placeId,
         place.name,
@@ -52,6 +56,7 @@ export function planCandidate(
         p.position_accuracy,
         p.latitude !== null ? p.position_source : null,
         p.google_maps_url,
+        homeDistanceKm(p, origin),
         now,
         now,
         now,
@@ -171,6 +176,7 @@ export async function applyBundle(db: D1Database, raw: unknown, options: ApplyOp
   }
   const bundle = validation.bundle;
   const matches = matchCandidates(bundle.candidates, await loadKnown(db));
+  const origin = await getOrigin(db);
 
   const outcomes: ApplyOutcome[] = [];
   for (const match of matches) {
@@ -193,7 +199,7 @@ export async function applyBundle(db: D1Database, raw: unknown, options: ApplyOp
       placeId: newId(),
       sourceEntryId: newId(),
     };
-    const plan = planCandidate(candidate, match.place, ids, bundle.batch_id, now().toISOString());
+    const plan = planCandidate(candidate, match.place, ids, bundle.batch_id, now().toISOString(), origin);
     try {
       await db.batch(plan.map((s) => db.prepare(s.sql).bind(...s.params)));
       outcomes.push({ ...base, result: "inserted", item_id: ids.itemId, reason: null });

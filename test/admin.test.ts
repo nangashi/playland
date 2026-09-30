@@ -229,6 +229,26 @@ describe("場所と移動の編集", () => {
     expect(detail.travel?.find((v) => v.mode === "bicycle")).toMatchObject({ estimate: null, stale_only: true });
   });
 
+  it("自宅を設定すると場所ごとの距離を保存し、日帰り・旅行で絞り込める。ピンを動かすと計算し直す", async () => {
+    const headers = await parentLogin();
+    const settings: AdminSettingsResponse = await (await get("/api/admin/settings", { headers })).json();
+    await sendJson("PATCH", "/api/admin/settings", { version: settings.version, origin_latitude: 35.68, origin_longitude: 139.76 }, headers);
+    const science: AdminPlaceResponse = await (await get("/api/admin/places/pl-sample-science", { headers })).json();
+    expect(science.place).toMatchObject({ home_distance_km: 0, version: 1 });
+    const gym: AdminPlaceResponse = await (await get("/api/admin/places/pl-sample-gym", { headers })).json();
+    expect(gym.place.home_distance_km).toBeNull();
+
+    const dayTrip: ItemListResponse = await (await get("/api/items?trip=day_trip")).json();
+    expect(dayTrip.items.map((i) => i.id)).toContain("it-science-spot");
+    expect(dayTrip.items.every((i) => i.trip === "day_trip")).toBe(true);
+
+    // 北へ緯度 1 度（約 111km）動かすと旅行になる
+    const res = await sendJson("PATCH", "/api/admin/places/pl-sample-science", { version: 1, latitude: 36.68, longitude: 139.76 }, headers);
+    expect(res.status).toBe(200);
+    const trip: ItemListResponse = await (await get("/api/items?trip=trip")).json();
+    expect(trip.items.map((i) => i.id)).toEqual(["it-science-spot"]);
+  });
+
   it("一般の設定 API と監査ログに自宅の座標を出さない（A21）", async () => {
     const headers = await parentLogin();
     await sendJson("PATCH", "/api/admin/settings", { version: 1, origin_latitude: 35.123, origin_longitude: 139.456 }, headers);
