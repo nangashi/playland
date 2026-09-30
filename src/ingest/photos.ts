@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { httpUrlSchema } from "../domain/admin";
 import { MAX_IMAGE_BYTES, sha256Hex, sniffImageType } from "../domain/image";
-import { mediaKinds } from "../domain/model";
+import { idSchema, mediaKinds } from "../domain/model";
 
 /**
  * 写真の取り込み。スキルが候補（画像 URL・掲載ページ・種類・出典）を挙げ、
@@ -17,8 +17,14 @@ export const photoListSchema = z
       .array(
         z
           .object({
-            /** 取り込み済みの候補を出典キーで指定する */
-            item: z.object({ source_id: z.string().min(1), source_key: z.string().min(1) }).strict(),
+            /**
+             * 対象の候補。取り込み済みの候補は出典キーで、管理画面で追加した候補など出典キーのないものは
+             * enrich-export の item_id で指定する
+             */
+            item: z.union([
+              z.object({ source_id: z.string().min(1), source_key: z.string().min(1) }).strict(),
+              z.object({ item_id: idSchema }).strict(),
+            ]),
             image_url: httpUrlSchema,
             page_url: httpUrlSchema,
             /** venue=施設の外観・設備 / past_event=過去の様子 / image=イメージ */
@@ -51,15 +57,23 @@ export interface PhotoManifestEntry {
 
 export type ItemResolver = (ref: PhotoCandidate["item"]) => Promise<{ id: string; title: string } | null>;
 
-export function sourceKeyResolver(db: D1Database): ItemResolver {
+/** 写真リストの候補の指定（出典キーか item_id）から候補を探す */
+export function itemResolver(db: D1Database): ItemResolver {
   return async (ref) =>
-    db
-      .prepare(
-        `SELECT i.id, i.title FROM source_entries s JOIN items i ON i.id = s.item_id
-          WHERE s.source_id = ? AND s.source_key = ?`,
-      )
-      .bind(ref.source_id, ref.source_key)
-      .first<{ id: string; title: string }>();
+    "item_id" in ref
+      ? db.prepare(`SELECT id, title FROM items WHERE id = ?`).bind(ref.item_id).first<{ id: string; title: string }>()
+      : db
+          .prepare(
+            `SELECT i.id, i.title FROM source_entries s JOIN items i ON i.id = s.item_id
+              WHERE s.source_id = ? AND s.source_key = ?`,
+          )
+          .bind(ref.source_id, ref.source_key)
+          .first<{ id: string; title: string }>();
+}
+
+/** 確認ページ・ログ用の候補の表示名（見つからないとき） */
+export function itemRefLabel(ref: PhotoCandidate["item"]): string {
+  return "item_id" in ref ? ref.item_id : ref.source_key;
 }
 
 export interface PhotoApplyOutcome {

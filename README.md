@@ -59,7 +59,14 @@ pnpm ingest apply    .local/ingest/<batch>.json --target local [--accept 1,3]
 pnpm ingest geocode --target local [--apply]         # 住所から座標（国土地理院 住所検索・おおよその位置）
 pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真候補を取得し確認ページを作る
 pnpm ingest photos-apply .local/ingest/<photos>.json --target local --accept 0,3
+pnpm ingest enrich-export --target local [--all]                  # 空欄の残る候補（既定は管理画面で追加した候補）
+pnpm ingest enrich-preview .local/ingest/<enrich>.json --target local
+pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0,2|all
 ```
+
+- 補足（enrich）は、既存の候補の空欄（unknown・null・未判定のタグ・場所の住所）だけを埋める。値の入った項目は変えず、
+  書き出したときの版と一致する候補だけを更新する。親の確認日時は変えず、根拠は出典（`source_entries`）に残す。
+  写真のない候補も書き出し、写真リストでは出典キーの代わりに `item_id` で候補を指定できる（取得・確認・保存は photos-fetch / photos-apply）。
 
 - 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に保存する。親が確認ページで採用したものだけを保存する。
 - 画像の取得は https のみ・内部アドレス拒否（名前解決後に確認）・リダイレクト先も再検査・5MB まで・実際の内容で形式を判定。

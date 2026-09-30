@@ -1,6 +1,6 @@
 ---
 name: collect-outings
-description: 家族向けお出かけ発見アプリ（playland）の候補（常設スポット）を集め、登録用 JSON を作って検証・プレビューする。親から「お出かけ先を集めて」「このURLを候補に追加して」と頼まれたときに使う。登録（apply）は親の承認後だけ。
+description: 家族向けお出かけ発見アプリ（playland）の候補（常設スポット）を集め、登録用 JSON を作って検証・プレビューする。既存の候補の空欄（管理画面で追加した候補など）を公式ページで調べて補足する。親から「お出かけ先を集めて」「このURLを候補に追加して」「追加した場所の情報を埋めて」と頼まれたときに使う。登録（apply）は親の承認後だけ。
 ---
 
 # お出かけ候補の収集
@@ -119,6 +119,7 @@ pnpm ingest geocode --target local --apply  # 保存（位置は「おおよそ�
 
 1. 各施設の公式ページから、ページ上にある画像 URL だけを挙げる（推測しない）。ロゴ・アイコン・地図・文字だけの画像・告知バナーは除く。
 2. `.local/ingest/photos-<番号>.json` に書く（形式は `src/ingest/photos.ts` の `photoListSchema`）。
+   候補は出典キー（`source_id` + `source_key`）で指定する。出典キーのない候補は `item_id` で指定する。
    `kind` は venue（施設の外観・設備）／past_event（過去のワークショップ等の様子）／image（イメージ）。`credit` は掲載元、`caption` は写っているもの。
 3. 取得して確認ページを作る（固定コードが https・内部アドレス拒否・5MB・画像形式を検査する）:
 
@@ -137,3 +138,55 @@ pnpm ingest geocode --target local --apply  # 保存（位置は「おおよそ�
 
 登録した件数、スキップした件数と理由、タグの提案、見つけた良い収集元（`config/sources.yaml` への追加案）を親に伝える。
 `config/sources.yaml` の変更は親の了承を得てから行う。
+
+## 既存の候補を補足する
+
+管理画面で追加した候補（タイトル・URL・場所だけ）などの **空欄** を、公式ページで調べて埋める。
+書き換わるのは空欄（`unknown` / `null` / 未判定のタグ・場所の住所）だけで、値の入っている項目は固定コードが変更しない。
+上の「守ること」はここでも同じ。
+
+1. 空欄の残る候補を書き出す（既定は通常の取り込みを経ていない候補。取り込み済みも含めるなら `--all`）:
+
+   ```bash
+   pnpm ingest enrich-export --target local     # .local/ingest/incomplete.json
+   pnpm ingest tags
+   ```
+
+   各候補の `missing`（空欄の項目）・`photo_count`（写真の枚数）・`current`（今の値）・`official_url`・場所の名前を読む。
+   `missing` が空で `photo_count` が 0 の候補は、写真だけを探す。
+2. 公式ページ（`official_url`。なければ施設名で公式サイトを探す）を開いて、**空欄の項目だけ** を調べる。
+   別の施設と取り違えないよう、施設名・場所が一致するページか確かめる。自信がなければ書かずに `needs_review` に書く。
+3. `.local/ingest/enrich-<番号>.json` に書く（形式は `fixtures/ingest/sample-enrich.json` と `src/ingest/enrich.ts`）。
+
+   | 項目 | ルール |
+   | --- | --- |
+   | `item_id` / `version` | `incomplete.json` の値をそのまま。版が変わっていたら登録されない（書き出し直す） |
+   | `source.source_id` | 公式ページは `official-site`、親が渡した URL は `parent_url` |
+   | `item` | 分かった項目だけを書く。**分からない項目は `unknown` にせず省略する**。項目の意味は上の「判断のルール」と同じ |
+   | タグ | `facility_tag_ids` / `experience_tag_ids`。書いた分類は「判定済み」になる（該当なしなら空配列）。未判定の分類だけが対象 |
+   | `place.address_text` | 場所の住所が空欄のときだけ。公式のアクセスページの記載。座標は書かない（あとで geocode） |
+   | `evidence` | 雨天・年齢・同伴や参加条件・予約・料金・住所を書いたら根拠が必須（`item.rain_policy` / `item.age` / `item.eligibility` / `item.reservation` / `item.price` / `place.address`） |
+
+4. `photo_count` が 0 の候補は、同じ公式ページを調べるついでに写真の候補も挙げる。ルールは「9. 写真の候補を挙げる」と同じ。
+   `.local/ingest/photos-enrich-<番号>.json` に書き、候補は **`"item": { "item_id": "<incomplete.json の item_id>" }`** で指定する
+   （管理画面で追加した候補には出典キーがないため）。
+5. 検証・プレビューし、写真を取得して確認ページを作る:
+
+   ```bash
+   pnpm ingest enrich-validate .local/ingest/enrich-<番号>.json
+   pnpm ingest enrich-preview  .local/ingest/enrich-<番号>.json --target local
+   pnpm ingest photos-fetch    .local/ingest/photos-enrich-<番号>.json --target local
+   ```
+
+   `+` が埋める項目、`=` が値があるため変えない項目。「書き出し後に変更あり」は書き出しからやり直す。
+   プレビューの要約と、写真の確認ページ（`.local/ingest/photos/<batch>/review.html`）を親にまとめて見せ、
+   **ここで止まって、補足と写真それぞれについて親の承認を待つ。**
+6. 親が承認した番号だけを登録する（すべてなら `--accept all`）:
+
+   ```bash
+   pnpm ingest enrich-apply .local/ingest/enrich-<番号>.json --target local --accept 0,2
+   pnpm ingest photos-apply .local/ingest/photos-enrich-<番号>.json --target local --accept 0,3
+   ```
+
+   親の確認日時は更新しない。補足した項目は変更履歴（操作者 `ingest:enrich:<batch_id>`）と出典の根拠で区別できる。
+7. 住所を埋めた場所は「8. 座標を取得する」を実行する。本番では最後に `pnpm ops backup --target production`。

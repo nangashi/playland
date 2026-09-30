@@ -161,7 +161,19 @@ pnpm ingest photos-apply .local/ingest/<photos>.json --target production --confi
 pnpm ops backup --target production
 ```
 
-- 本番への書き込み（apply・geocode --apply・photos-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
+管理画面で追加した候補の空欄を補足するとき（手順は同じスキルの「既存の候補を補足する」）:
+
+```bash
+pnpm ingest enrich-export  --target production
+pnpm ingest enrich-preview .local/ingest/<enrich>.json --target production
+pnpm ingest photos-fetch   .local/ingest/<photos-enrich>.json --target production   # 写真のない候補（item_id で指定）
+pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target production --confirm --accept 0,2
+pnpm ingest photos-apply   .local/ingest/<photos-enrich>.json --target production --confirm --accept 0,3
+pnpm ingest geocode --target production --apply --confirm     # 住所を埋めた場所の座標
+pnpm ops backup --target production
+```
+
+- 本番への書き込み（apply・geocode --apply・photos-apply・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
   エージェントは preview の結果を親に見せ、承認を得てから `--confirm` を付ける。
 - 本番への接続は wrangler のリモートバインディング（`wrangler login` の認証）を使う。一時設定 `.wrangler-remote.tmp.json` は終了時に削除される。
 

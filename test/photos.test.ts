@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemDetailResponse } from "../src/domain/api";
 import { sha256Hex } from "../src/domain/image";
-import { applyPhotos, photoListSchema, sourceKeyResolver, type PhotoManifestEntry } from "../src/ingest/photos";
+import { applyPhotos, photoListSchema, itemResolver, type PhotoManifestEntry } from "../src/ingest/photos";
 import { get, seed } from "./helpers";
 
 // 1x1 の PNG
@@ -43,7 +43,7 @@ beforeEach(async () => {
 });
 
 const run = (inputs: { entry: PhotoManifestEntry; bytes: Uint8Array | null }[], accept: number[]) =>
-  applyPhotos(env.DB, env.MEDIA, inputs, new Set(accept), { resolveItem: sourceKeyResolver(env.DB) });
+  applyPhotos(env.DB, env.MEDIA, inputs, new Set(accept), { resolveItem: itemResolver(env.DB) });
 
 describe("写真の保存", () => {
   it("親が採用したものだけを、出典付きで保存し、カードに使う", async () => {
@@ -105,10 +105,24 @@ describe("写真の保存", () => {
     expect(n?.n).toBe(0);
   });
 
+  it("出典キーのない候補（管理画面で追加したもの）は item_id で指定できる", async () => {
+    const byId = (itemId: string) => ({ ...candidate, item: { item_id: itemId } });
+    const r = await run([{ entry: { ...(await entry(0)), candidate: byId("it-farm-spot") }, bytes: PNG }], [0]);
+    expect(r[0]?.result).toBe("saved");
+    const row = await env.DB.prepare("SELECT item_id FROM media WHERE id = ?").bind(r[0]!.media_id).first();
+    expect(row).toEqual({ item_id: "it-farm-spot" });
+    const missing = await run([{ entry: { ...(await entry(0)), candidate: byId("it-nope") }, bytes: PNG }], [0]);
+    expect(missing[0]).toMatchObject({ result: "error", reason: "対応する候補が登録されていません" });
+  });
+
   it("写真リストの形式を検証する（出典・種類は必須）", () => {
     const ok = { schema_version: 1, batch_id: "p1", photos: [candidate] };
     expect(photoListSchema.safeParse(ok).success).toBe(true);
     expect(photoListSchema.safeParse({ ...ok, photos: [{ ...candidate, credit: "" }] }).success).toBe(false);
     expect(photoListSchema.safeParse({ ...ok, photos: [{ ...candidate, image_url: "javascript:x" }] }).success).toBe(false);
+    expect(photoListSchema.safeParse({ ...ok, photos: [{ ...candidate, item: { item_id: "it-farm-spot" } }] }).success).toBe(true);
+    // 出典キーと item_id を混ぜた指定は受け付けない
+    const mixed = { item_id: "it-farm-spot", source_id: "official-site", source_key: "woodshop" };
+    expect(photoListSchema.safeParse({ ...ok, photos: [{ ...candidate, item: mixed }] }).success).toBe(false);
   });
 });

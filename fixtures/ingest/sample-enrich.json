@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "kind": "enrich",
+  "batch_id": "sample-enrich-001",
+  "created_at": "2026-09-30T00:00:00Z",
+  "updates": [
+    {
+      "item_id": "it-gym-spot",
+      "version": 1,
+      "source": {
+        "source_id": "official-site",
+        "url": "https://example.com/gym/kids",
+        "fetched_at": "2026-09-30T00:00:00Z"
+      },
+      "item": {
+        "official_url": "https://example.com/gym",
+        "rain_policy": "ok",
+        "age_max_kind": "none",
+        "guardian_rule": "required"
+      },
+      "place": {
+        "address_text": "サンプル市いわ町7-7"
+      },
+      "evidence": [
+        {
+          "field": "item.rain_policy",
+          "text": "全面屋内のジムです。",
+          "source_url": "https://example.com/gym/kids"
+        },
+        {
+          "field": "item.age",
+          "text": "キッズ利用は4歳から（上限なし）。",
+          "source_url": "https://example.com/gym/kids"
+        },
+        {
+          "field": "item.eligibility",
+          "text": "小学生以下は保護者の同伴が必要です。",
+          "source_url": "https://example.com/gym/kids"
+        },
+        {
+          "field": "place.address",
+          "text": "所在地：サンプル市いわ町7-7",
+          "source_url": "https://example.com/gym/access"
+        }
+      ],
+      "needs_review": [
+        "平日と休日で子どもの利用時間が違う"
+      ]
+    },
+    {
+      "item_id": "it-science-spot",
+      "version": 1,
+      "source": {
+        "source_id": "official-site",
+        "url": "https://example.com/science/guide",
+        "fetched_at": "2026-09-30T00:00:00Z"
+      },
+      "item": {
+        "rain_policy": "conditional",
+        "price_status": "paid",
+        "price_text": "大人500円・中学生以下無料"
+      },
+      "evidence": [
+        {
+          "field": "item.rain_policy",
+          "text": "屋外の実験広場は雨天中止。",
+          "source_url": "https://example.com/science/guide"
+        },
+        {
+          "field": "item.price",
+          "text": "入館料 大人500円・中学生以下無料",
+          "source_url": "https://example.com/science/guide"
+        }
+      ]
+    },
+    {
+      "item_id": "it-farm-spot",
+      "version": 1,
+      "source": {
+        "source_id": "official-site",
+        "url": "https://example.com/farm",
+        "fetched_at": "2026-09-30T00:00:00Z"
+      },
+      "item": {
+        "child_description": "ヤギやウサギにえさをあげられる小さな牧場。",
+        "experience_tag_ids": [
+          "animals"
+        ]
+      }
+    }
+  ]
+}

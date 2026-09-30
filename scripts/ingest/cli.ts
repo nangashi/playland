@@ -10,9 +10,13 @@
  *   pnpm ingest geocode  --target local [--apply]      住所から座標を取得（国土地理院 住所検索）
  *   pnpm ingest photos-fetch <photos.json> --target local           写真の候補を取得し確認ページを作る
  *   pnpm ingest photos-apply <photos.json> --target local --accept 1,3  採用した写真を保存
+ *   pnpm ingest enrich-export  --target local [--all]  空欄の残る候補を書き出す（既定は管理画面で追加した候補）
+ *   pnpm ingest enrich-validate <enrich.json>          補足用 JSON の検証（DB を見ない）
+ *   pnpm ingest enrich-preview  <enrich.json> --target local   埋める項目・変えない項目の一覧
+ *   pnpm ingest enrich-apply    <enrich.json> --target local --accept 0,2|all  空欄だけを埋める
  *
  * --target production は wrangler login の認証で本番の D1・R2 に接続する。
- * 本番への書き込み（apply / geocode --apply / photos-apply）には --confirm が必要。
+ * 本番への書き込み（apply / geocode --apply / photos-apply / enrich-apply）には --confirm が必要。
  * エージェントは preview の結果を親に見せ、承認を得てから --confirm を付ける。
  */
 import { createHash } from "node:crypto";
@@ -22,6 +26,13 @@ import { parseArgs } from "node:util";
 import { CATEGORIES, TAGS } from "../../src/domain/tags";
 import { applyBundle, previewBundle } from "../../src/ingest/apply";
 import { validateBundle, type BundleValidation } from "../../src/ingest/bundle";
+import {
+  applyEnrich,
+  loadIncomplete,
+  previewEnrich,
+  validateEnrichBundle,
+  type EnrichValidation,
+} from "../../src/ingest/enrich";
 import { geocodePlaces, gsiGeocoder } from "../../src/ingest/geocode";
 import { loadKnown } from "../../src/ingest/known";
 import { openTarget, parseTarget, requireConfirm, UsageError, type TargetEnv } from "../lib/target";
@@ -30,6 +41,7 @@ import { loadSources } from "./sources";
 
 const MAX_BUNDLE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_KNOWN_PATH = ".local/ingest/known.json";
+const DEFAULT_INCOMPLETE_PATH = ".local/ingest/incomplete.json";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -40,6 +52,7 @@ const { positionals, values } = parseArgs({
     json: { type: "boolean", default: false },
     apply: { type: "boolean", default: false },
     confirm: { type: "boolean", default: false },
+    all: { type: "boolean", default: false },
   },
 });
 const [command, file] = positionals;
@@ -64,9 +77,17 @@ async function main(): Promise<number> {
       return withDb((db) => photosFetch(db, requireFile()));
     case "photos-apply":
       return withDb((db, env) => photosApply(db, env.MEDIA, requireFile()), "写真の保存");
+    case "enrich-export":
+      return withDb((db) => enrichExport(db));
+    case "enrich-validate":
+      return enrichValidate(requireFile());
+    case "enrich-preview":
+      return withDb((db) => enrichPreview(db, requireFile()));
+    case "enrich-apply":
+      return withDb((db) => enrichApply(db, requireFile()), "候補の補足");
     default:
       console.error(
-        "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|photos-fetch|photos-apply> [file] --target local",
+        "使い方: pnpm ingest <tags|sources|export-known|validate|preview|apply|geocode|photos-fetch|photos-apply|enrich-export|enrich-validate|enrich-preview|enrich-apply> [file] --target local",
       );
       return 2;
   }
@@ -206,7 +227,7 @@ async function geocode(db: D1Database): Promise<number> {
 
 async function photosFetch(db: D1Database, path: string): Promise<number> {
   const list = await readPhotoList(path);
-  const { dir, manifest } = await fetchPhotos(db, list);
+  const { dir, manifest } = await fetchPhotos(db, list, parseTarget(values.target));
   const ok = manifest.filter((m) => m.status === "ok").length;
   console.log(`\n${ok} / ${manifest.length} 件を取得しました。${dir}/review.html を開いて、採用する番号を選んでください。`);
   return 0;
@@ -222,6 +243,111 @@ async function photosApply(db: D1Database, bucket: R2Bucket, path: string): Prom
     console.log(`[${label[o.result]}] #${o.index}${o.reason ? `  ${o.reason}` : ""}`);
   }
   return outcomes.some((o) => o.result === "error") ? 1 : 0;
+}
+
+async function enrichExport(db: D1Database): Promise<number> {
+  const items = await loadIncomplete(db, { all: values.all });
+  const out = values.out ?? DEFAULT_INCOMPLETE_PATH;
+  await mkdir(dirname(out), { recursive: true });
+  await writeFile(out, JSON.stringify({ exported_at: new Date().toISOString(), items }, null, 2));
+  console.log(`${out} に書き出しました（空欄の残る候補 ${items.length} 件${values.all ? "・取り込み済みの候補を含む" : ""}）`);
+  for (const i of items) {
+    const photos = i.photo_count === 0 ? "写真なし" : `写真 ${i.photo_count} 枚`;
+    console.log(`  ${i.title}（${i.item_id}）${photos}  空欄: ${i.missing.length > 0 ? i.missing.join(", ") : "なし"}`);
+  }
+  return 0;
+}
+
+async function checkEnrichSourceIds(v: EnrichValidation): Promise<string[]> {
+  if (!v.bundle) return [];
+  const ids = new Set((await loadSources()).map((s) => s.id));
+  return v.bundle.updates.flatMap((u, i) =>
+    ids.has(u.source.source_id) ? [] : [`#${i} 収集元 ${u.source.source_id} が config/sources.yaml にありません`],
+  );
+}
+
+function printEnrichValidation(v: EnrichValidation, sourceErrors: string[]) {
+  if (v.bundle === null) {
+    console.log("✗ 形式エラー");
+    for (const e of v.formatErrors) console.log(`  - ${e}`);
+    return;
+  }
+  for (const issue of v.issues) {
+    const mark = issue.errors.length > 0 ? "✗" : "✓";
+    console.log(`${mark} #${issue.index} ${issue.item_id}`);
+    for (const e of issue.errors) console.log(`    エラー: ${e}`);
+    for (const w of issue.warnings) console.log(`    確認: ${w}`);
+  }
+  for (const e of sourceErrors) console.log(`✗ ${e}`);
+}
+
+async function readValidEnrich(path: string): Promise<{ raw: unknown; hash: string; v: EnrichValidation; ok: boolean; sourceErrors: string[] }> {
+  const { raw, hash } = await readBundle(path);
+  const v = validateEnrichBundle(raw);
+  const sourceErrors = await checkEnrichSourceIds(v);
+  const ok = v.ok && sourceErrors.length === 0;
+  if (!ok) printEnrichValidation(v, sourceErrors);
+  return { raw, hash, v, ok, sourceErrors };
+}
+
+async function enrichValidate(path: string): Promise<number> {
+  const { v, ok, sourceErrors } = await readValidEnrich(path);
+  if (values.json) console.log(JSON.stringify({ ...v, sourceErrors }, null, 2));
+  else if (ok) printEnrichValidation(v, sourceErrors);
+  return ok ? 0 : 1;
+}
+
+const formatValue = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
+
+async function enrichPreview(db: D1Database, path: string): Promise<number> {
+  const { v, ok } = await readValidEnrich(path);
+  if (!ok || !v.bundle) {
+    console.log("\n検証エラーがあるため照合していません。");
+    return 1;
+  }
+  const result = await previewEnrich(db, v.bundle);
+  if (values.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return 0;
+  }
+  const label = { update: "補足", nothing: "変更なし", stale: "書き出し後に変更あり", conflict: "要確認", not_found: "エラー" };
+  for (const p of result.plans) {
+    console.log(`[${label[p.status]}] #${p.index} ${p.title}（${p.item_id}）`);
+    for (const f of p.fills) console.log(`    + ${f.field}: ${formatValue(f.value)}`);
+    for (const k of p.kept) console.log(`    = ${k.field}: 値があるため変更しない（今の値: ${formatValue(k.current)}）`);
+    for (const r of p.reasons) console.log(`    ${r}`);
+    for (const w of v.issues[p.index]?.warnings ?? []) console.log(`    確認: ${w}`);
+  }
+  const updatable = result.plans.filter((p) => p.status === "update").map((p) => p.index);
+  console.log(`\n補足できる候補: ${updatable.length > 0 ? updatable.join(",") : "なし"}`);
+  console.log("親が確認した番号を enrich-apply の --accept に渡してください（すべてなら --accept all）。");
+  return 0;
+}
+
+async function enrichApply(db: D1Database, path: string): Promise<number> {
+  const { raw, hash, ok } = await readValidEnrich(path);
+  if (!ok) return 1;
+  if (!values.accept) throw new UsageError("補足する番号を --accept で指定してください（すべてなら --accept all）");
+  const accept = values.accept.trim() === "all" ? "all" : parseAccept();
+  const result = await applyEnrich(db, raw, { target: parseTarget(values.target), inputHash: hash, accept });
+  if (values.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const label = {
+      updated: "補足",
+      skipped_not_accepted: "",
+      skipped_nothing: "変更なし",
+      skipped_stale: "書き出し後に変更ありのため未登録",
+      skipped_conflict: "要確認のため未登録",
+      error: "失敗",
+    };
+    for (const o of result.outcomes.filter((o) => o.result !== "skipped_not_accepted")) {
+      console.log(`[${label[o.result]}] #${o.index} ${o.title}${o.fields.length > 0 ? `  ${o.fields.join(", ")}` : ""}`);
+      if (o.reason) console.log(`    ${o.reason}`);
+    }
+    console.log(`\n結果: ${result.status}（実行 ID ${result.run_id}）`);
+  }
+  return result.status === "failed" ? 1 : 0;
 }
 
 async function exportKnown(db: D1Database): Promise<number> {
