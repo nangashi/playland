@@ -88,7 +88,7 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 手順は [docs/production.md](docs/production.md)。workers.dev を Worker 単位の Cloudflare Access で保護し、ローカルのデータを `pnpm ops copy-to-production --confirm` で移す。
 
 ```bash
-pnpm deploy                                   # vite build && wrangler deploy
+pnpm run deploy                               # vite build && wrangler deploy（pnpm deploy は pnpm の別コマンド）
 pnpm db:migrate:remote
 pnpm ops status  --target production
 pnpm ops backup  --target production          # .local/backups へ（家族の情報を含む。Git に置かない）

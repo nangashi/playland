@@ -58,9 +58,13 @@ export async function openTarget(target: Target, options: { localState?: string 
   if (!d1?.database_id || d1.database_id === PLACEHOLDER_DB_ID) {
     throw new UsageError("本番の D1 がまだ設定されていません（wrangler.jsonc の database_id）。docs/production.md の手順で作成してください");
   }
-  // 本番の DB・バケットだけをリモートにした一時設定（Git 管理外。終了時に削除）
+  // 本番の DB・バケットだけをリモートにした一時設定（Git 管理外。終了時に削除）。
+  // リモートバインディングは Worker のプレビューを経由するため、名前をアプリ本体と分ける。
+  // アプリ本体は Worker 単位の Access でプレビューまで保護されている。こちらは D1・R2 への中継だけで、
+  // wrangler が持つプレビュー用トークンがないと接続できない
   const remote = {
     ...config,
+    name: `${String(config.name)}-cli-remote`,
     d1_databases: (config.d1_databases as object[]).map((b) => ({ ...b, remote: true })),
     r2_buckets: (config.r2_buckets as object[]).map((b) => ({ ...b, remote: true })),
   };

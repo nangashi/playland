@@ -45,7 +45,7 @@ npx wrangler secret put PARENT_PIN                     # 4〜12 桁の数字を�
 ## 3. 最初のデプロイ（この時点ではすべて 503 で拒否される）
 
 ```bash
-pnpm deploy
+pnpm run deploy
 curl -s -o /dev/null -w "%{http_code}\n" https://playland.<サブドメイン>.workers.dev/api/settings   # 503
 ```
 
@@ -91,7 +91,7 @@ cf はベータのため、コマンド名が変わっていたら `cf cli searc
    ```
 
    ```bash
-   pnpm deploy
+   pnpm run deploy
    ```
 
 ## 5. 公開後の確認
@@ -114,6 +114,11 @@ pnpm ops copy-to-production --confirm      # 写真 → データの順に複製
 pnpm ops status --target production        # ローカルと件数が一致することを確認
 ```
 
+- 2026-09-30 の初回移行は、実行環境の制限でリモートバインディングが使えなかったため、次の方法で行った（結果は同じ）。
+  データ：`wrangler d1 export playland --local --no-schema` から `d1_migrations`・`sqlite_sequence`・`family_settings` の行を除き、
+  `wrangler d1 execute playland --remote --file` で実行。写真：`wrangler r2 object put playland-media/<key> --remote` で 54 枚。
+  本番を書き出してローカルと突き合わせ、内容が一致することを確認した。
+
 移したあと、本番の管理画面で次を設定する：出発地（自宅の位置・地図で指定）、自転車の上限時間、PLAY! PARK のピン（町の代表点のため）。
 
 ## 7. バックアップと復元
@@ -132,6 +137,15 @@ pnpm ops backup --target production                    # .local/backups/producti
   ```
 
 - 本番が壊れた場合は、空の D1 にマイグレーションを適用してから `pnpm ops restore <DIR> --target production --confirm`。
+
+## 注意点
+
+- `pnpm deploy` は pnpm の組み込みコマンドなので、`pnpm run deploy` を使う。
+- ローカルの D1 は `preview_database_id`（`0000…`）の鍵で保存している。`database_id`（本番）を変えてもローカルのデータは変わらない。
+- `--target production` はリモートバインディングで本番の D1・R2 に接続する。中継用のプレビュー Worker 名は `playland-cli-remote`
+  （アプリ本体の `playland` は Worker 単位の Access でプレビューまで保護されているため、名前を分けている）。
+- ネットワークや設定ディレクトリが制限された環境（コーディングエージェントのサンドボックス等）では、リモートバインディングが動かないことがある。
+  その場合は自分のターミナルで実行する。
 
 ## 8. 今後の取り込み
 

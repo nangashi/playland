@@ -17,8 +17,10 @@
     {
       "binding": "DB",
       "database_name": "playland",
-      // 本番の ID は Cloudflare 側で作成後に設定する。ローカル開発では使われない
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // 本番の D1（wrangler d1 create playland で作成）。ローカル開発では使われない
+      "database_id": "aa34a800-88f9-4566-abb2-8c89c9f1df1d",
+      // ローカル開発で使う DB の鍵（本番の ID に切り替える前から使っているローカルのデータを引き継ぐ）
+      "preview_database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
   ],
@@ -35,7 +37,8 @@
     // "access"：Cloudflare Access の JWT を検証する（本番）
     // "dev-mock"：localhost からのリクエストに限り認証を省略する（.dev.vars で上書き）
     "AUTH_MODE": "access",
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    // Worker 単位の Access アプリ（docs/production.md）。秘密情報ではない
+    "ACCESS_TEAM_DOMAIN": "patient-hill-b5d0.cloudflareaccess.com",
+    "ACCESS_AUD": "fd519bfcfff5bc3176da775610dc84611530acb4cf8b3ed857d2d475dfd99adb"
   }
 }
