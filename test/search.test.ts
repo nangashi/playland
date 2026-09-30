@@ -83,35 +83,6 @@ describe("雨の日でも遊べる（A04）", () => {
   });
 });
 
-describe("年齢の参加資格（A05）", () => {
-  const d = data({
-    items: [
-      makeItem("6plus", { age_min_kind: "value", age_min: 6, age_max_kind: "none" }),
-      makeItem("6plus-max-unstated", { age_min_kind: "value", age_min: 6, age_max_kind: "unknown" }),
-      makeItem("any-age", { age_min_kind: "none", age_max_kind: "none" }),
-      makeItem("unknown"),
-      makeItem("3to5", { age_min_kind: "value", age_min: 3, age_max_kind: "value", age_max: 5 }),
-      // おすすめ年齢は参加資格として使わない
-      makeItem("recommended-only", { recommended_age_min: 7, recommended_age_max: 9 }),
-    ],
-  });
-
-  it("参加資格が確認できたものだけが一致", () => {
-    expect(ids(searchItems(d, query({ age: 7 }))).sort()).toEqual(["6plus", "any-age"]);
-    expect(ids(searchItems(d, query({ age: 4 })))).toEqual(["3to5", "any-age"]);
-  });
-
-  it("上限の記載なしは「制限なし」と扱わず不明", () => {
-    const r = searchItems(d, query({ age: 7, include_unknown: "true" }));
-    expect(r.entries.find((e) => e.item.id === "6plus-max-unstated")?.unknown).toEqual(["age"]);
-    expect(r.entries.find((e) => e.item.id === "recommended-only")?.unknown).toEqual(["age"]);
-  });
-
-  it("既知の対象外は不明を含めても戻さない", () => {
-    expect(ids(searchItems(d, query({ age: 7, include_unknown: "true" })))).not.toContain("3to5");
-  });
-});
-
 describe("カテゴリ（含まれるタグのどれかに当てはまれば一致）", () => {
   const assessed = { facility_tags_status: "assessed", experience_tags_status: "assessed" } as const;
   const d = data({

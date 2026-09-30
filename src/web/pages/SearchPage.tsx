@@ -87,7 +87,7 @@ export function SearchPage() {
           <span aria-live="polite">
             <strong>{data.total}</strong> 件
           </span>
-          <label className="inline-check" title="雨・年齢・移動などの情報が未登録で、条件に合うか分からない候補も後ろに表示します">
+          <label className="inline-check" title="雨・移動・距離などの情報が未登録で、条件に合うか分からない候補も後ろに表示します">
             <input
               type="checkbox"
               checked={state.includeUnknown}

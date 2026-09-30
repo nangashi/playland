@@ -124,7 +124,6 @@ describe("apply（登録）", () => {
       title: "サンプル市こどもプラネタリウム",
       rain_policy: "ok",
       place: { name: "サンプル市こどもプラネタリウム", address_text: "サンプル市ほしの町4-1", latitude: null },
-      eligibility: { age_min_kind: "none", age_max_kind: "none" },
       reservation_requirement: "not_required",
       price_status: "paid",
     });
