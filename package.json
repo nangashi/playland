@@ -12,8 +12,8 @@
     "db:seed:local": "wrangler d1 execute playland --local --file fixtures/seed.sql",
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate:local && pnpm db:seed:local",
     "cf-typegen": "wrangler types --strict-vars=false src/server/worker-configuration.d.ts",
-    "ingest": "node --import tsx scripts/ingest/cli.ts",
-    "ops": "node --import tsx scripts/ops/cli.ts",
+    "ingest": "NODE_USE_ENV_PROXY=1 node --import tsx scripts/ingest/cli.ts",
+    "ops": "NODE_USE_ENV_PROXY=1 node --import tsx scripts/ops/cli.ts",
     "wt": "node --import tsx scripts/dev/worktree.ts",
     "deploy": "node --import tsx scripts/ops/release-guard.ts && vite build && wrangler deploy",
     "db:migrate:remote": "wrangler d1 migrations apply playland --remote"

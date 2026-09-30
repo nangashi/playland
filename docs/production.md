@@ -160,29 +160,49 @@ LLM と対話しながら候補を調べて登録用 JSON を作り、コマン�
 
 ```bash
 pnpm ingest export-known --target production
-pnpm ingest preview  .local/ingest/<batch>.json --target production
-pnpm ingest apply    .local/ingest/<batch>.json --target production --confirm [--accept 1,3]
-pnpm ingest geocode  --target production --apply --confirm
-pnpm ingest photos-fetch .local/ingest/<photos>.json --target production
-pnpm ingest photos-apply .local/ingest/<photos>.json --target production --confirm --accept 0,3
+pnpm ingest validate .local/ingest/<batch>.json
+pnpm ingest run      .local/ingest/<batch>.json --target production --confirm --photos .local/ingest/<photos>.json
 pnpm ops backup --target production
 ```
+
+候補は下書き、写真は採用待ちで入り、親が本番のアプリの「承認待ち」（`/admin/inbox`）で公開・見送りを決める。
 
 管理画面で追加した候補の空欄を補足するとき（手順は同じスキルの「既存の候補を補足する」）:
 
 ```bash
 pnpm ingest enrich-export  --target production
 pnpm ingest enrich-preview .local/ingest/<enrich>.json --target production
-pnpm ingest photos-fetch   .local/ingest/<photos-enrich>.json --target production   # 写真のない候補（item_id で指定）
 pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target production --confirm --accept 0,2
-pnpm ingest photos-apply   .local/ingest/<photos-enrich>.json --target production --confirm --accept 0,3
+pnpm ingest photos-fetch   .local/ingest/<photos-enrich>.json --target production --confirm   # 採用待ちで保存
 pnpm ingest geocode --target production --apply --confirm     # 住所を埋めた場所の座標
 pnpm ops backup --target production
 ```
 
-- 本番への書き込み（apply・geocode --apply・photos-apply・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
-  エージェントは preview の結果を親に見せ、承認を得てから `--confirm` を付ける。
-- 本番への接続は wrangler のリモートバインディング（`wrangler login` の認証）を使う。一時設定 `.wrangler-remote.tmp.json` は終了時に削除される。
+- 本番への書き込み（run・apply・geocode --apply・photos-fetch・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
+  エージェントは親の承認（「本番に取り込んで」等の指示）を得てから `--confirm` を付ける。
+
+### 本番への接続
+
+- 環境変数 `CLOUDFLARE_API_TOKEN` があれば、Cloudflare の HTTP API（`api.cloudflare.com`）で D1・R2 を操作する（`scripts/lib/cloudflare-http.ts`）。
+  Node の fetch だけを使うので、Claude Code のサンドボックス（通信がプロキシ経由に限られる）からも動く。**エージェントに任せるときはこちら。**
+- なければ、wrangler のリモートバインディング（`wrangler login` の認証）を使う。一時設定 `.wrangler-remote.tmp.json` は終了時に削除される。
+  こちらは内部の実行環境が自分で名前解決するため、サンドボックスからは使えない（自分のターミナルで実行する）。
+
+API トークンの作り方（一度だけ）:
+
+1. ダッシュボードの「My Profile → API Tokens → Create Token → Custom token」で、次の権限だけを付ける。
+   - Account → **D1 → Edit**
+   - Account → **Workers R2 Storage → Edit**
+   - Account Resources は自分のアカウントだけ。有効期限も付けておくとよい。
+2. トークンを、Git に入らない場所から環境変数として渡す。Claude Code から使うなら、メインの作業ツリーの
+   `.claude/settings.local.json`（Git 管理外）に書くのが簡単:
+
+   ```json
+   { "env": { "CLOUDFLARE_API_TOKEN": "<トークン>", "CLOUDFLARE_ACCOUNT_ID": "<アカウント ID>" } }
+   ```
+
+   `CLOUDFLARE_ACCOUNT_ID` を省くと、トークンで見えるアカウントが 1 つならそれを使う。
+3. 確認：`pnpm ops status --target production`（読み取りだけ）
 
 ## 9. リリース（main へのマージ）
 

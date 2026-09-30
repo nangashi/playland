@@ -32,6 +32,9 @@ description: 家族向けお出かけ発見アプリ（playland）の候補（�
 
 ### 本番で取り込むとき
 
+本番への接続は、環境変数 `CLOUDFLARE_API_TOKEN` があれば Cloudflare の HTTP API を使い、サンドボックスからも実行できる
+（コマンドの `allowed_domains` に `api.cloudflare.com` を入れる）。トークンがなければ実行せず、親に `docs/production.md` の「本番への接続」を案内する。
+
 以下の手順の `--target local` を `--target production` に読み替える。本番への書き込みコマンド（run・apply・geocode --apply・photos-fetch・enrich-apply）には、
 親の承認後に `--confirm` を付ける。承認待ちの URL は本番のアプリの `/admin/inbox`。登録や写真の保存のあとは `pnpm ops backup --target production` を実行する（詳細は `docs/production.md`）。
 
