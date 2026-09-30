@@ -10,6 +10,7 @@ import type {
   TransportPreferenceRecord,
   TravelEstimateRecord,
 } from "../domain/model";
+import type { AdminItemSummary } from "../domain/api";
 import { homeDistanceKm, originOf, type LatLng } from "../domain/trip";
 
 /**
@@ -33,6 +34,19 @@ export async function listPublishedItems(db: D1Database): Promise<ItemRecord[]> 
   const { results } = await db
     .prepare(`SELECT ${ITEM_COLUMNS} FROM items WHERE publish_status = 'published'`)
     .all<ItemRecord>();
+  return results;
+}
+
+/** 管理画面の一覧用。公開状態を問わず、下書き→公開→非表示、それぞれ更新の新しい順 */
+export async function listAdminItems(db: D1Database): Promise<AdminItemSummary[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT i.id, i.title, i.publish_status, i.place_id, p.name AS place_name, i.updated_at
+         FROM items i LEFT JOIN places p ON p.id = i.place_id
+        ORDER BY CASE i.publish_status WHEN 'draft' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
+                 i.updated_at DESC, i.id`,
+    )
+    .all<AdminItemSummary>();
   return results;
 }
 

@@ -8,6 +8,7 @@ import type {
 } from "../domain/admin";
 import type {
   AdminInboxResponse,
+  AdminItemListResponse,
   AdminItemResponse,
   AdminPlaceListResponse,
   AdminPlaceResponse,
@@ -101,6 +102,10 @@ export function startAdminSession(pin: string) {
 
 export function endAdminSession() {
   return request<void>("/api/admin/session", { method: "DELETE" });
+}
+
+export function fetchAdminItems(signal?: AbortSignal) {
+  return request<AdminItemListResponse>("/api/admin/items", { signal });
 }
 
 export function fetchAdminItem(id: string, signal?: AbortSignal) {

@@ -29,7 +29,7 @@ export function AdminPlacePage() {
   const placeSave = useSave();
   const transportSave = useSave();
   return (
-    <AdminFrame title="場所・移動の編集">
+    <AdminFrame title="場所・移動の編集" back>
       <PlaceForm key={`p:${data.place.version}`} data={data} save={placeSave} reload={revalidator.revalidate} />
       <TransportForm key={`t:${data.place.version}`} data={data} save={transportSave} reload={revalidator.revalidate} />
     </AdminFrame>

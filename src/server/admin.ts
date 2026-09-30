@@ -17,6 +17,7 @@ import {
 } from "../domain/admin";
 import type {
   AdminInboxResponse,
+  AdminItemListResponse,
   AdminItemResponse,
   AdminPlaceListResponse,
   AdminPlaceResponse,
@@ -64,6 +65,11 @@ adminApi.delete("/session", (c) => {
 adminApi.use("*", requireParent());
 
 // ---- 候補 ----
+
+adminApi.get("/items", async (c) => {
+  const body: AdminItemListResponse = { items: await repo.listAdminItems(c.env.DB) };
+  return c.json(body);
+});
 
 adminApi.get("/items/:id", async (c) => {
   const id = idSchema.safeParse(c.req.param("id"));

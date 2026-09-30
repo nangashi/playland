@@ -1,16 +1,16 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
-import { createItem, endAdminSession, fetchAdminInbox, fetchAdminPlaces } from "../../api";
+import { createItem, fetchAdminPlaces } from "../../api";
 import { AdminFrame, requireParentSession, SaveMessage, useSave } from "./common";
 
-export async function adminHomeLoader(args: LoaderFunctionArgs) {
-  const session = await requireParentSession(args);
-  const [{ places }, inbox] = await Promise.all([fetchAdminPlaces(args.request.signal), fetchAdminInbox(args.request.signal)]);
-  return { session, places, inboxCount: inbox.entries.length };
+export async function adminNewItemLoader(args: LoaderFunctionArgs) {
+  await requireParentSession(args);
+  const { places } = await fetchAdminPlaces(args.request.signal);
+  return { places };
 }
 
-export function AdminHomePage() {
-  const { session, places, inboxCount } = useLoaderData<typeof adminHomeLoader>();
+export function AdminNewItemPage() {
+  const { places } = useLoaderData<typeof adminNewItemLoader>();
   const navigate = useNavigate();
   const { status, run } = useSave();
   const [title, setTitle] = useState("");
@@ -33,32 +33,16 @@ export function AdminHomePage() {
     if (ok && created) navigate(`/admin/items/${encodeURIComponent((created as { id: string }).id)}`);
   }
 
-  async function logout() {
-    await endAdminSession().catch(() => undefined);
-    navigate("/search");
-  }
-
   return (
-    <AdminFrame title="管理">
+    <AdminFrame title="候補を追加">
       <p className="muted">
-        親の確認は {session.expires_at ? new Date(session.expires_at).toLocaleTimeString("ja-JP") : "-"} まで有効です。
+        追加のしかたは 2 通りあります。1 件ずつならこの画面で、まとめて集めるなら Claude Code に頼みます。
       </p>
-      <div className="admin-menu">
-        <Link className={inboxCount > 0 ? "link-button" : "secondary-button"} to="/admin/inbox">
-          承認待ち（{inboxCount} 件）
-        </Link>
-        <Link className="secondary-button" to="/admin/settings">
-          家族の設定（出発地・自転車の上限）
-        </Link>
-        <button type="button" className="secondary-button" onClick={logout}>
-          親の確認を終える
-        </button>
-      </div>
 
       <section className="section">
-        <h2 className="section-title">候補を手動で追加</h2>
+        <h3 className="admin-subtitle">1 件ずつ追加する</h3>
         <p className="muted">
-          名前・URL・場所だけで追加できます。分からない項目は「未確認」のまま登録され、あとから編集できます。
+          名前・URL・場所だけで追加でき、すぐに家族の画面に出ます。分からない項目は「未確認」のまま登録され、あとから編集できます。
           （イベントは次のフェーズで対応します）
         </p>
         <form className="form" onSubmit={submit}>
@@ -93,15 +77,22 @@ export function AdminHomePage() {
               <input value={newPlaceName} onChange={(e) => setNewPlaceName(e.target.value)} placeholder="場所の名前" required />
             )}
           </fieldset>
-          <button
-            type="submit"
-            className="link-button"
-            disabled={status.kind === "saving"}
-          >
+          <button type="submit" className="link-button" disabled={status.kind === "saving"}>
             追加して編集へ
           </button>
           <SaveMessage status={status} onReload={() => navigate(0)} />
         </form>
+      </section>
+
+      <section className="section admin-note">
+        <h3 className="admin-subtitle">まとめて集めて追加する</h3>
+        <ol>
+          <li>Claude Code に「お出かけ先を集めて」「この URL を候補に追加して」と頼む</li>
+          <li>
+            集めた候補は下書き、写真は採用待ちとして<Link to="/admin/inbox">「承認待ち」タブ</Link>に入る
+          </li>
+          <li>承認待ちで内容と写真を確かめ、「公開する」か「見送る」を選ぶ（公開するまで家族の画面には出ません）</li>
+        </ol>
       </section>
     </AdminFrame>
   );

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Link, redirect, type LoaderFunctionArgs } from "react-router";
-import { ApiError, fetchAdminSession } from "../../api";
+import { Link, Outlet, redirect, useLoaderData, useLocation, useNavigate, type LoaderFunctionArgs } from "react-router";
+import { ApiError, endAdminSession, fetchAdminInbox, fetchAdminSession } from "../../api";
 
 /** 親セッションがなければ PIN 入力へ。画面側の確認は案内のためで、権限はサーバーで検証する */
 export async function requireParentSession({ request }: LoaderFunctionArgs) {
@@ -12,16 +12,83 @@ export async function requireParentSession({ request }: LoaderFunctionArgs) {
   return session;
 }
 
-export function AdminFrame({ title, children }: { title: string; children: ReactNode }) {
+/** タブに承認待ちの件数を出す。公開・見送りのあとは再読み込みで件数も更新される */
+export async function adminLayoutLoader(args: LoaderFunctionArgs) {
+  const session = await requireParentSession(args);
+  const inbox = await fetchAdminInbox(args.request.signal);
+  return { session, inboxCount: inbox.entries.length };
+}
+
+/** 管理画面の共通の枠：目的の説明と、やれることごとのタブ。各タブの中身は Outlet に入る */
+export function AdminLayout() {
+  const { session, inboxCount } = useLoaderData<typeof adminLayoutLoader>();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // 候補・場所の編集は一覧から開くので、一覧のタブを選択中として扱う
+  const inList = pathname.startsWith("/admin/items") || pathname.startsWith("/admin/places/");
+  const tabs = [
+    { to: "/admin/inbox", label: "承認待ち", count: inboxCount, active: pathname === "/admin/inbox" },
+    { to: "/admin/items", label: "候補の一覧", active: inList },
+    { to: "/admin/new", label: "候補を追加", active: pathname === "/admin/new" },
+    { to: "/admin/settings", label: "家族の設定", active: pathname === "/admin/settings" },
+  ];
+
+  async function logout() {
+    await endAdminSession().catch(() => undefined);
+    navigate("/search");
+  }
+
   return (
     <main className="page admin">
-      <nav className="admin-nav">
-        <Link to="/admin">管理トップ</Link>
-        <Link to="/search">一覧へ</Link>
+      <header className="admin-header">
+        <Link to="/search" className="topbar-link">
+          ← 家族の画面へ
+        </Link>
+        <span className="admin-session">
+          {session.expires_at && (
+            <span className="muted">{new Date(session.expires_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })} まで有効</span>
+          )}
+          <button type="button" className="text-button" onClick={logout}>
+            親の確認を終える
+          </button>
+        </span>
+      </header>
+      <h1 className="page-title admin-title">管理（親だけが使う画面）</h1>
+      <p className="muted admin-lead">
+        集めた候補の公開・見送り、候補の追加・内容の修正、家族の設定（出発地など）を行います。ここでの変更は家族の画面にそのまま反映されます。
+      </p>
+      <nav className="admin-tabs" aria-label="管理のメニュー">
+        {tabs.map((t) => (
+          <Link
+            key={t.to}
+            to={t.to}
+            className={t.active ? "admin-tab is-active" : "admin-tab"}
+            aria-current={t.active ? "page" : undefined}
+          >
+            {t.label}
+            {t.count !== undefined && (
+              <span className={t.count > 0 ? "admin-tab-count is-alert" : "admin-tab-count"}>{t.count}</span>
+            )}
+          </Link>
+        ))}
       </nav>
-      <h1 className="page-title admin-title">{title}</h1>
-      {children}
+      <Outlet />
     </main>
+  );
+}
+
+/** タブの中の 1 画面。見出しと、必要なら一覧へ戻るリンク */
+export function AdminFrame({ title, back, children }: { title: string; back?: boolean; children: ReactNode }) {
+  return (
+    <>
+      {back && (
+        <p className="admin-back">
+          <Link to="/admin/items">← 候補の一覧へ</Link>
+        </p>
+      )}
+      <h2 className="section-title admin-section-title">{title}</h2>
+      {children}
+    </>
   );
 }
 

@@ -1101,10 +1101,11 @@ button.link-button {
 }
 
 /* ---- 管理 ---- */
-.admin-nav {
+.admin-header {
   display: flex;
-  gap: 16px;
-  font-size: 13px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .page-title {
@@ -1114,12 +1115,164 @@ button.link-button {
 
 .admin-title {
   text-align: left;
+  margin-bottom: 4px;
 }
 
-.admin-menu {
+.admin-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+/* やれることごとのタブ */
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.admin-tab {
+  padding: 8px 14px;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .admin-tab {
+    padding: 8px 7px;
+    font-size: 13px;
+  }
+
+  .admin-tab-count {
+    margin-left: 3px;
+  }
+}
+
+.admin-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.admin-tab-count {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.admin-tab-count.is-alert {
+  background: var(--save);
+  color: var(--accent-text);
+}
+
+.admin-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.admin-back {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.admin-section-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.admin-subtitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.admin-note {
+  max-width: 760px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.admin-note p,
+.admin-note ol {
+  margin: 6px 0;
+}
+
+.admin-note ol {
+  padding-left: 1.4em;
+}
+
+/* 候補の一覧 */
+.admin-list-tools {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.admin-search {
+  flex: 1 1 180px;
+  max-width: 280px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.admin-row {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.admin-row + .admin-row {
+  border-top: 1px solid var(--border);
+}
+
+.admin-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-row-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.admin-row-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 12px;
 }
 
 .form {

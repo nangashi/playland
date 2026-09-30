@@ -148,6 +148,15 @@ export interface AdminPlaceResponse {
   estimates: TravelEstimateRecord[];
 }
 
+export interface AdminItemSummary
+  extends Pick<ItemRecord, "id" | "title" | "publish_status" | "place_id" | "updated_at"> {
+  place_name: string | null;
+}
+
+export interface AdminItemListResponse {
+  items: AdminItemSummary[];
+}
+
 export interface AdminPlaceListResponse {
   places: Pick<PlaceRecord, "id" | "name">[];
 }
