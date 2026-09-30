@@ -26,9 +26,9 @@ INSERT INTO items (id, kind, place_id, title, child_description, rain_policy, pu
   ('it-hidden', 'spot', 'pl-sample-park', '非表示にした候補', NULL, 'unknown', 'hidden', NULL, '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
 
 -- 家族で共有する保存
-INSERT INTO bookmarks (item_id, created_at) VALUES
-  ('it-science-spot', '2026-09-10T00:00:00.000Z'),
-  ('it-park-spot', '2026-09-10T00:00:00.000Z');
+INSERT INTO bookmarks (item_id, created_at, rank) VALUES
+  ('it-science-spot', '2026-09-10T00:00:00.000Z', 1),
+  ('it-park-spot', '2026-09-10T00:00:00.000Z', 2);
 
 -- タグ（判定済み。牧場は体験タグが未判定）
 UPDATE items SET facility_tags_status = 'assessed', experience_tags_status = 'assessed'

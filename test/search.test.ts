@@ -16,8 +16,8 @@ describe("公開状態・保存・並び順", () => {
     makeItem("event", { kind: "event", created_at: "2026-09-09T00:00:00.000Z" }),
   ];
   const bookmarks = [
-    { item_id: "a", created_at: "2026-09-10T00:00:00.000Z" },
-    { item_id: "hidden", created_at: "2026-09-10T00:00:00.000Z" },
+    { item_id: "a", created_at: "2026-09-10T00:00:00.000Z", rank: 1 },
+    { item_id: "hidden", created_at: "2026-09-10T00:00:00.000Z", rank: 2 },
   ];
   const d = data({ items, bookmarks });
 
@@ -46,7 +46,7 @@ describe("興味なし", () => {
       makeItem("c", { created_at: "2026-09-01T00:00:00.000Z" }),
     ],
     hidden: [{ item_id: "a", created_at: "2026-09-10T00:00:00.000Z" }],
-    bookmarks: [{ item_id: "a", created_at: "2026-09-10T00:00:00.000Z" }],
+    bookmarks: [{ item_id: "a", created_at: "2026-09-10T00:00:00.000Z", rank: 1 }],
   });
 
   it("既定では出さず、保存済みでも出さない", () => {

@@ -7,9 +7,11 @@ import type {
   MapItemsResponse,
   MediaRef,
   PublicSettingsResponse,
+  RankingResponse,
 } from "../domain/api";
 import { buildVenueGroups, MAX_MAP_MARKERS } from "../domain/map";
 import { idSchema, type ItemRecord, type MediaRecord, type PlaceRecord } from "../domain/model";
+import { rankingEntries, rankingPutSchema, reorderBookmarks } from "../domain/ranking";
 import {
   parseSearchQuery,
   searchAllEntries,
@@ -174,6 +176,38 @@ publicApi.delete("/bookmarks/:itemId", async (c) => {
   if (!itemId.success) return notFound(c);
   // 非公開になった候補の保存も解除できるよう、候補の公開状態は問わない
   await repo.removeBookmark(c.env.DB, itemId.data);
+  return c.body(null, 204);
+});
+
+/** 保存したものの家族ランキング。並べ替えは保存と同じく誰でもできる */
+publicApi.get("/ranking", async (c) => {
+  const db = c.env.DB;
+  const [data, places, media] = await Promise.all([loadSearchData(db), repo.listPlaces(db), repo.listActiveMedia(db)]);
+  const placeMap = new Map(places.map((p) => [p.id, p]));
+  const covers = coverIndex(media);
+  const body: RankingResponse = { items: rankingEntries(data).map((e) => toCard(e, placeMap, covers)) };
+  return c.json(body);
+});
+
+/**
+ * ランキングに出ている候補すべてを、新しい順で受け取る。
+ * 別の端末で保存・解除などがあって組が一致しなければ 409（何も書き換えない）。
+ */
+publicApi.put("/ranking", async (c) => {
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid" }, 400);
+  }
+  const parsed = rankingPutSchema.safeParse(raw);
+  if (!parsed.success) return c.json({ error: "invalid" }, 400);
+  const db = c.env.DB;
+  const data = await loadSearchData(db);
+  const visible = rankingEntries(data).map((e) => e.item.id);
+  const result = reorderBookmarks(data.bookmarks, visible, parsed.data.item_ids);
+  if (!result.ok) return c.json({ error: "ranking changed" }, 409);
+  await repo.setBookmarkOrder(db, result.order);
   return c.body(null, 204);
 });
 

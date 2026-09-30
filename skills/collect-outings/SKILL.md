@@ -18,10 +18,16 @@ description: 家族向けお出かけ発見アプリ（playland）の候補（�
 - **不明は不明のまま** `unknown` / `null` にする。推測で埋めない。未確認を `false`・0円・0分にしない。
 - 座標・Google の Place ID を生成しない。元ページに座標が書かれている場合だけ `position_source: "source_page"` で入れる。
 - 根拠（evidence）は元ページの **短い引用**（300 文字以内）。記事を全文転載しない。
-- 登録（`apply`）は **親が preview の結果を確認して承認してから**。承認なしに実行しない。`--target production` は使わない（まだ無効）。
+- 登録（`apply`）は **親が preview の結果を確認して承認してから**。承認なしに実行しない。
+- 対象は、親の指示で `--target local`（手元の確認用）か `--target production`（本番）を選ぶ。本番への書き込みには `--confirm` が必要で、**親の承認を得たときだけ付ける**。
 - 画像を自分でダウンロード・保存しない。写真は「写真リスト」に候補を書き、固定のコマンドで取得・親の確認・保存を行う（下の「写真」）。
 
 ## 手順
+
+### 本番で取り込むとき
+
+以下の手順の `--target local` を `--target production` に読み替える。本番への書き込みコマンド（apply・geocode --apply・photos-apply）には、
+親の承認後に `--confirm` を付ける。登録や写真の保存のあとは `pnpm ops backup --target production` を実行する（詳細は `docs/production.md`）。
 
 ### 1. 準備
 

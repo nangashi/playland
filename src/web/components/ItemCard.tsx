@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { ItemCard as ItemCardData } from "../../domain/api";
 import { rainLabel, unknownReasonLabel } from "../../domain/labels";
@@ -10,10 +11,12 @@ interface Props {
   item: ItemCardData;
   onSavedChange: (itemId: string, saved: boolean) => void;
   onHiddenChange: (itemId: string, hidden: boolean) => void;
+  /** 写真の左上に重ねる印（ランキングの順位など） */
+  badge?: ReactNode;
 }
 
 /** 一覧のカード（横長・高密度）。細かな条件は詳細へ */
-export function ItemCard({ item, onSavedChange, onHiddenChange }: Props) {
+export function ItemCard({ item, onSavedChange, onHiddenChange, badge }: Props) {
   const facts = [
     item.rain_policy === "ok" ? { text: rainLabel.ok, tone: "ok" } : null,
     item.reservation_requirement === "required" ? { text: "要予約", tone: "warn" } : null,
@@ -26,6 +29,7 @@ export function ItemCard({ item, onSavedChange, onHiddenChange }: Props) {
       <Link to={`/items/${encodeURIComponent(item.id)}`} className="card-link">
         <div className="card-thumb">
           <Photo media={item.cover} alt="" showKind={false} />
+          {badge}
         </div>
         <div className="card-body">
           <h2 className="card-title">{item.title}</h2>

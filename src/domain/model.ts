@@ -151,6 +151,8 @@ export type PositionSource = (typeof positionSources)[number];
 export interface BookmarkRecord {
   item_id: string;
   created_at: string;
+  /** ランキングの順位（小さいほど上位）。新しく保存したものは最後 */
+  rank: number;
 }
 
 export interface MediaRecord {
