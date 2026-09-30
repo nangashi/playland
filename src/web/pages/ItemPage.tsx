@@ -206,7 +206,7 @@ export function ItemPage() {
           {item.initialized_at && `初回登録 ${item.initialized_at.slice(0, 10)}`}
           {item.parent_reviewed_at && `／確認・修正 ${item.parent_reviewed_at.slice(0, 10)}`}
           {item.media.some((m) => m.credit) &&
-            `／写真 ${item.media.flatMap((m) => (m.credit ? [m.credit] : [])).join("、")}`}
+            `／写真 ${[...new Set(item.media.flatMap((m) => (m.credit ? [m.credit] : [])))].join("、")}`}
         </p>
       </footer>
     </main>
