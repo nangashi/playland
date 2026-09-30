@@ -23,6 +23,18 @@ pnpm typecheck
 pnpm build
 ```
 
+### 並行開発（ワークツリー）
+
+```bash
+pnpm wt feat/<名前>              # 隣の playland.worktrees/ に作り、.dev.vars とローカルの D1・R2 をコピーする
+cd ../playland.worktrees/feat-<名前> && pnpm dev   # 5173 が使用中なら 5174… で起動する
+git worktree remove ../playland.worktrees/feat-<名前>   # 片付け（コピーしたデータも消える）
+```
+
+- ローカルのデータはワークツリーごとに独立する（ブランチで足したマイグレーションが他に混ざらない）。
+  コピーはメインの作業ツリーの `pnpm dev` を止めてから行うと確実。
+- `.local/`（取り込みの JSON・バックアップ）はコピーしない。取り込みはメインの作業ツリーで行う。
+
 ## ディレクトリ
 
 | パス | 内容 |
@@ -88,9 +100,11 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 
 手順は [docs/production.md](docs/production.md)。workers.dev を Worker 単位の Cloudflare Access で保護し、ローカルのデータを `pnpm ops copy-to-production --confirm` で移す。
 
+**リリースは main へのマージで行う。** GitHub Actions（`.github/workflows/ci.yml`）が PR で typecheck・test・build を行い、
+main に入ったらリモートの D1 にマイグレーションを当ててから `wrangler deploy` する。feature ブランチからはデプロイしない。
+
 ```bash
-pnpm run deploy                               # vite build && wrangler deploy（pnpm deploy は pnpm の別コマンド）
-pnpm db:migrate:remote
+pnpm db:migrate:remote && pnpm run deploy     # CI が使えないときだけ。main・変更なし・origin/main と一致のときだけ通る
 pnpm ops status  --target production
 pnpm ops backup  --target production          # .local/backups へ（家族の情報を含む。Git に置かない）
 pnpm ops restore <DIR> --target local --state <別の保存場所>   # 復元の確認

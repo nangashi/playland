@@ -1,0 +1,56 @@
+# PR では検査だけ。main に入ったら検査のあと本番へリリースする（docs/production.md「リリース」）
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # 本番へのリリースは一度に一つ。途中のリリースは取り消さず、後から来たものを待たせる
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # マイグレーションはデプロイより先に当てる。古いコードでも動く変更（列の追加など）にしておくこと
+      - run: pnpm db:migrate:remote
+      # pnpm run deploy は手元用（main で作業ツリーが綺麗なときだけ通す確認付き）なので、ここでは直接実行する
+      - run: pnpm build
+      - run: pnpm exec wrangler deploy
