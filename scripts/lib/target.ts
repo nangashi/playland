@@ -61,11 +61,17 @@ export async function openTarget(target: Target, options: { localState?: string 
   // 本番の DB・バケットだけをリモートにした一時設定（Git 管理外。終了時に削除）。
   // リモートバインディングは Worker のプレビューを経由するため、名前をアプリ本体と分ける。
   // アプリ本体は Worker 単位の Access でプレビューまで保護されている。こちらは D1・R2 への中継だけで、
-  // wrangler が持つプレビュー用トークンがないと接続できない
+  // wrangler が持つプレビュー用トークンがないと接続できない。
+  // preview_database_id はローカル DB の鍵（0000…）なので、リモートでは本番の database_id に置き換える
+  // （残すとプレビュー接続がその ID の D1 を探して失敗する）
   const remote = {
     ...config,
     name: `${String(config.name)}-cli-remote`,
-    d1_databases: (config.d1_databases as object[]).map((b) => ({ ...b, remote: true })),
+    d1_databases: (config.d1_databases as { database_id: string }[]).map((b) => ({
+      ...b,
+      preview_database_id: b.database_id,
+      remote: true,
+    })),
     r2_buckets: (config.r2_buckets as object[]).map((b) => ({ ...b, remote: true })),
   };
   await writeFile(REMOTE_CONFIG, JSON.stringify(remote, null, 2));

@@ -151,6 +151,13 @@ pnpm ops backup --target production                    # .local/backups/producti
 
 LLM と対話しながら候補を調べて登録用 JSON を作り、コマンドで本番へ登録する（手順の原本は `skills/collect-outings/SKILL.md`）。
 
+コードは CI がリリースするが、データの登録は手元から本番へ直接書き込む（リリースを経由しない）。実行する前に：
+
+- **main の最新で実行する**（`git switch main && git pull`）。登録コマンドもコードの一部なので、未マージのブランチから本番へ書くと、
+  本番の画面・API が想定していない形のデータが入ることがある。
+- **マイグレーションを含む変更は、CI のデプロイが終わってから実行する**。新しい列を使う登録は、本番の DB に列ができる前だと失敗する。
+  確認：`gh run list --repo nangashi/playland --branch main --limit 1`（最新が completed・success であること）
+
 ```bash
 pnpm ingest export-known --target production
 pnpm ingest preview  .local/ingest/<batch>.json --target production
@@ -161,7 +168,19 @@ pnpm ingest photos-apply .local/ingest/<photos>.json --target production --confi
 pnpm ops backup --target production
 ```
 
-- 本番への書き込み（apply・geocode --apply・photos-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
+管理画面で追加した候補の空欄を補足するとき（手順は同じスキルの「既存の候補を補足する」）:
+
+```bash
+pnpm ingest enrich-export  --target production
+pnpm ingest enrich-preview .local/ingest/<enrich>.json --target production
+pnpm ingest photos-fetch   .local/ingest/<photos-enrich>.json --target production   # 写真のない候補（item_id で指定）
+pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target production --confirm --accept 0,2
+pnpm ingest photos-apply   .local/ingest/<photos-enrich>.json --target production --confirm --accept 0,3
+pnpm ingest geocode --target production --apply --confirm     # 住所を埋めた場所の座標
+pnpm ops backup --target production
+```
+
+- 本番への書き込み（apply・geocode --apply・photos-apply・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
   エージェントは preview の結果を親に見せ、承認を得てから `--confirm` を付ける。
 - 本番への接続は wrangler のリモートバインディング（`wrangler login` の認証）を使う。一時設定 `.wrangler-remote.tmp.json` は終了時に削除される。
 
@@ -173,7 +192,7 @@ pnpm ops backup --target production
 - main への push：同じ検査のあと、`pnpm db:migrate:remote` → `pnpm build` → `wrangler deploy`（`production` 環境、同時に 1 つだけ）。
 - マイグレーションはデプロイより先に当たる。列の追加など、古いコードのままでも動く変更にする（列の削除・改名は 2 回のリリースに分ける）。
 - 画面の確認はマージ前にローカルで行う（並行開発は README の「並行開発（ワークツリー）」）。プレビュー URL は本番の D1・R2 につながるので使わない。
-- データの取り込み・バックアップはコードのリリースではないので、これまでどおり手元から `--target production` で行う。
+- データの取り込み・バックアップはコードのリリースではないので、これまでどおり手元から `--target production` で行う（「8. 今後の取り込み」の注意を参照）。
 
 ### 準備（一度だけ）
 

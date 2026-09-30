@@ -4,8 +4,9 @@ import { sha256Hex } from "../../src/domain/image";
 import { mediaKindLabel } from "../../src/domain/labels";
 import {
   applyPhotos,
+  itemRefLabel,
+  itemResolver,
   photoListSchema,
-  sourceKeyResolver,
   type PhotoList,
   type PhotoManifestEntry,
 } from "../../src/ingest/photos";
@@ -26,16 +27,20 @@ function workDir(list: PhotoList) {
 }
 
 /** 候補を取得して保存し、確認用のページ（review.html）を作る。DB と R2 には書かない */
-export async function fetchPhotos(db: D1Database, list: PhotoList): Promise<{ dir: string; manifest: PhotoManifestEntry[] }> {
+export async function fetchPhotos(
+  db: D1Database,
+  list: PhotoList,
+  target: string,
+): Promise<{ dir: string; manifest: PhotoManifestEntry[] }> {
   const dir = workDir(list);
   await mkdir(dir, { recursive: true });
-  const resolve = sourceKeyResolver(db);
+  const resolve = itemResolver(db);
   const manifest: PhotoManifestEntry[] = [];
   const titles: string[] = [];
 
   for (const [index, candidate] of list.photos.entries()) {
     const item = await resolve(candidate.item);
-    titles.push(item?.title ?? `（未登録: ${candidate.item.source_key}）`);
+    titles.push(item?.title ?? `（未登録: ${itemRefLabel(candidate.item)}）`);
     const base = { index, candidate };
     if (!item) {
       manifest.push({ ...base, status: "error", error: "対応する候補が登録されていません", file: null, content_type: null, byte_size: null, sha256: null });
@@ -56,7 +61,7 @@ export async function fetchPhotos(db: D1Database, list: PhotoList): Promise<{ di
     await new Promise((r) => setTimeout(r, 500));
   }
   await writeFile(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
-  await writeFile(join(dir, "review.html"), reviewHtml(list, manifest, titles));
+  await writeFile(join(dir, "review.html"), reviewHtml(list, manifest, titles, target));
   return { dir, manifest };
 }
 
@@ -74,14 +79,14 @@ export async function applyFetchedPhotos(
       bytes: accept.has(entry.index) && entry.file ? new Uint8Array(await readFile(join(dir, entry.file))) : null,
     })),
   );
-  return applyPhotos(db, bucket, inputs, accept, { resolveItem: sourceKeyResolver(db) });
+  return applyPhotos(db, bucket, inputs, accept, { resolveItem: itemResolver(db) });
 }
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
 /** 親が採用する写真を選ぶための一覧（ローカルで開く静的ページ） */
-function reviewHtml(list: PhotoList, manifest: PhotoManifestEntry[], titles: string[]): string {
+function reviewHtml(list: PhotoList, manifest: PhotoManifestEntry[], titles: string[], target: string): string {
   const cards = manifest
     .map((m) => {
       const c = m.candidate;
@@ -113,7 +118,7 @@ code{background:#fff;padding:2px 6px;border:1px solid #d9dee4;border-radius:4px}
 </style></head><body>
 <h1>写真の確認（${escapeHtml(list.batch_id)}）</h1>
 <p>家族内の私的な利用として保存します。施設の外観や遊びの特徴が分かり、採用してよい写真の番号を選んでください。</p>
-<p>全部採用する場合：<code>pnpm ingest photos-apply ${escapeHtml(`.local/ingest/${list.batch_id}.json`)} --target local --accept ${ok.join(",")}</code></p>
+<p>全部採用する場合：<code>pnpm ingest photos-apply ${escapeHtml(`.local/ingest/${list.batch_id}.json`)} --target ${escapeHtml(target)}${target === "production" ? " --confirm" : ""} --accept ${ok.join(",")}</code></p>
 <div class="grid">${cards}</div>
 </body></html>`;
 }
