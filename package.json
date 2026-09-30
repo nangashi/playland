@@ -15,6 +15,7 @@
     "ingest": "NODE_USE_ENV_PROXY=1 node --import tsx scripts/ingest/cli.ts",
     "ops": "NODE_USE_ENV_PROXY=1 node --import tsx scripts/ops/cli.ts",
     "wt": "node --import tsx scripts/dev/worktree.ts",
+    "icons": "node --import tsx scripts/dev/icons.ts",
     "deploy": "node --import tsx scripts/ops/release-guard.ts && vite build && wrangler deploy",
     "db:migrate:remote": "wrangler d1 migrations apply playland --remote"
   },

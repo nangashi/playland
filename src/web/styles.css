@@ -69,6 +69,8 @@ a {
 .app {
   max-width: 1200px;
   margin: 0 auto;
+  /* ホーム画面から全画面で開いたとき、横向きのノッチや下端のバーに重ねない */
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .loading-bar {
@@ -1385,7 +1387,7 @@ button.link-button {
 .form-actions {
   position: sticky;
   bottom: 0;
-  padding: 10px 0;
+  padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
   background: var(--bg);
   display: grid;
   gap: 6px;
