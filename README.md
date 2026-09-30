@@ -42,6 +42,7 @@ git worktree remove ../playland.worktrees/feat-<名前>   # 片付け（コピ�
 | `src/domain/` | 画面と API で共有する型・検索・参加条件・移動の判定、タグとカテゴリの定義（`tags.ts`）、入力検証 |
 | `src/server/` | Worker（認証境界、API、D1 アクセス） |
 | `src/web/` | 画面 |
+| `public/` | そのまま配信するファイル（PWA のマニフェスト・Service Worker・オフライン案内・アイコン） |
 | `migrations/` | D1 マイグレーション |
 | `fixtures/` | 架空のテストデータのみ（実在の施設・人物を入れない） |
 | `test/` | テスト |
@@ -97,6 +98,14 @@ mkdir -p .claude/skills/collect-outings && ln -s ../../../skills/collect-outings
 - Worker でも、Access が渡す検証済みの情報（`ctx.access` の aud 一致）か、`Cf-Access-Jwt-Assertion` の JWT を検証する。
 - 親の編集はアプリ内 PIN で開始する 30 分のセッション（HttpOnly・Secure・SameSite=Strict の署名付き Cookie、Access の利用者に紐付け）。
   PIN の失敗は利用者ごと 5 回・全体 20 回／15 分で一時的に拒否する。`PARENT_PIN` / `ADMIN_SESSION_SECRET` が未設定なら管理機能は使えない。
+
+## ホーム画面に追加（PWA）
+
+- スマホのブラウザで開き「ホーム画面に追加」すると、アドレスバーのない単独の画面で開ける（`public/manifest.webmanifest`、開始は `/search`）。
+- マニフェスト・アイコン・Service Worker も Access の内側にあるため、マニフェストは `crossorigin="use-credentials"` で取る。
+- Service Worker（`public/sw.js`、本番ビルドのときだけ登録）は、通信できないときの案内（`/offline.html`）を出すだけ。
+  家族のデータ（`/api/*`）・写真・画面のスクリプトは端末のキャッシュに保存しない。
+- アイコンは `pnpm icons`（`scripts/dev/icons.ts`）で作り直す。
 
 ## データの扱い
 

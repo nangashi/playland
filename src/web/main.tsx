@@ -54,3 +54,10 @@ createRoot(document.getElementById("root")!).render(
     <RouterProvider router={router} />
   </StrictMode>,
 );
+
+// ホーム画面から開いたときのオフライン案内（public/sw.js）。開発中は Vite の配信と干渉させない
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err: unknown) => console.error("service worker", err));
+  });
+}
