@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ageFit, type Fit } from "./eligibility";
+import type { Fit } from "./eligibility";
 import {
   transportModes,
   type BookmarkRecord,
@@ -20,7 +20,7 @@ export const rainFilters = ["any", "ok"] as const;
 export type RainFilter = (typeof rainFilters)[number];
 
 /** 不明のため条件に一致と判断できなかった項目 */
-export const unknownReasons = ["category", "rain", "age", "travel", "trip"] as const;
+export const unknownReasons = ["category", "rain", "travel", "trip"] as const;
 export type UnknownReason = (typeof unknownReasons)[number];
 
 export const DEFAULT_PAGE_SIZE = 30;
@@ -42,7 +42,6 @@ export const searchQuerySchema = z.object({
   /** 家族で保存したものだけ */
   saved: boolParam.default(false),
   rain: z.enum(rainFilters).default("any"),
-  age: z.coerce.number().int().min(0).max(18).optional(),
   modes: modesParam.optional(),
   max_minutes: z.coerce.number().int().min(1).max(600).optional(),
   /** 自宅からの距離で分けた日帰り・旅行 */
@@ -61,7 +60,6 @@ const QUERY_KEYS = [
   "category",
   "saved",
   "rain",
-  "age",
   "modes",
   "max_minutes",
   "trip",
@@ -117,7 +115,7 @@ export interface SearchResult {
  * 公開中の常設スポットから条件に合うものを返す純粋関数。一覧と地図の両方がこれを使う。
  * - イベント（開催日のある候補）は次のフェーズまで対象外
  * - 不明は一致としない。include_unknown のときだけ理由付きで後ろに並べる
- * - 既知の不一致（年齢制限外など）は include_unknown でも戻さない
+ * - 既知の不一致は include_unknown でも戻さない
  * - 「興味なし」は include_hidden のときだけ含める
  * - 並び順は固定（一致 → 不明あり → 興味なし、各グループ内は新着順・ID 順）
  */
@@ -159,11 +157,6 @@ export function searchAllEntries(data: SearchData, query: SearchQuery): SearchEn
     if (rainResult === "mismatch") continue;
     if (rainResult === "unknown") unknown.push("rain");
 
-    if (query.age !== undefined) {
-      const fit = ageFit(item, query.age);
-      if (fit === "mismatch") continue;
-      if (fit === "unknown") unknown.push("age");
-    }
 
     const travel = item.place_id
       ? buildModeViews(item.place_id, data.preferences, data.estimates, data.settings)

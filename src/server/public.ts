@@ -131,16 +131,9 @@ publicApi.get("/items/:id", async (c) => {
         }
       : null,
     eligibility: {
-      age_min_kind: item.age_min_kind,
-      age_min: item.age_min,
-      age_max_kind: item.age_max_kind,
-      age_max: item.age_max,
-      eligibility_raw_text: item.eligibility_raw_text,
       guardian_rule: item.guardian_rule,
       sibling_rule: item.sibling_rule,
     },
-    recommended_age_min: item.recommended_age_min,
-    recommended_age_max: item.recommended_age_max,
     reservation_note: item.reservation_note,
     price_text: item.price_text,
     media: media.map((m) => ({

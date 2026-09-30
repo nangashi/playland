@@ -15,8 +15,6 @@ export interface SearchState {
   saved: boolean;
   /** 雨の日でも遊べる */
   rainOk: boolean;
-  /** 参加できる年齢 */
-  age: number | null;
   modes: TransportMode[];
   maxMinutes: number | null;
   /** 自宅からの距離で分けた日帰り・旅行 */
@@ -29,7 +27,6 @@ export interface SearchState {
 
 export const MAX_PAGES = 20;
 export const MINUTE_CHOICES = [20, 30, 45, 60, 90] as const;
-export const AGE_CHOICES = Array.from({ length: 13 }, (_, i) => i);
 
 export function readSearchState(params: URLSearchParams): SearchState {
   const list = (key: string) => (params.get(key) ?? "").split(",").filter((v) => v.length > 0);
@@ -38,7 +35,6 @@ export function readSearchState(params: URLSearchParams): SearchState {
     return Number.isFinite(n) ? n : null;
   };
   const cat = params.get("cat");
-  const age = int("age");
   const max = int("max");
   const pages = int("pages") ?? 1;
   const trip = params.get("trip");
@@ -47,7 +43,6 @@ export function readSearchState(params: URLSearchParams): SearchState {
     category: cat && getCategory(cat) ? cat : null,
     saved: params.get("saved") === "1",
     rainOk: params.get("rain") === "1",
-    age: age !== null && age >= 0 && age <= 18 ? age : null,
     modes: list("modes").filter((m): m is TransportMode => (transportModes as readonly string[]).includes(m)),
     maxMinutes: max !== null && max > 0 ? max : null,
     trip: (tripKinds as readonly (string | null)[]).includes(trip) ? (trip as TripKind) : null,
@@ -63,7 +58,6 @@ export function writeSearchState(state: SearchState): URLSearchParams {
   if (state.category) p.set("cat", state.category);
   if (state.saved) p.set("saved", "1");
   if (state.rainOk) p.set("rain", "1");
-  if (state.age !== null) p.set("age", String(state.age));
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max", String(state.maxMinutes));
   if (state.trip) p.set("trip", state.trip);
@@ -84,7 +78,6 @@ export function toApiParams(state: SearchState, page: number): URLSearchParams {
     offset: String(page * DEFAULT_PAGE_SIZE),
   });
   if (state.category) p.set("category", state.category);
-  if (state.age !== null) p.set("age", String(state.age));
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max_minutes", String(state.maxMinutes));
   if (state.trip) p.set("trip", state.trip);
@@ -116,7 +109,6 @@ export function activeConditions(state: SearchState): ActiveCondition[] {
   }
   if (state.saved) out.push({ label: "保存済み", reset: { saved: false } });
   if (state.rainOk) out.push({ label: "雨の日でも遊べる", reset: { rainOk: false } });
-  if (state.age !== null) out.push({ label: `${state.age}歳が参加できる`, reset: { age: null } });
   if (state.modes.length > 0 || state.maxMinutes !== null) {
     out.push({ label: "移動", reset: { modes: [], maxMinutes: null } });
   }
@@ -128,7 +120,6 @@ export const CLEARED: Partial<SearchState> = {
   category: null,
   saved: false,
   rainOk: false,
-  age: null,
   modes: [],
   maxMinutes: null,
   trip: null,
