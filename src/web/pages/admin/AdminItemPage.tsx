@@ -131,7 +131,7 @@ function ItemForm({
   }
 
   return (
-    <AdminFrame title="候補の編集">
+    <AdminFrame title="候補の編集" back>
       <p>
         <Link to={`/items/${encodeURIComponent(data.item.id)}`}>表示を確認</Link>
         {item.place_id && (

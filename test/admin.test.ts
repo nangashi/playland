@@ -1,6 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
+  AdminItemListResponse,
   AdminItemResponse,
   AdminPlaceResponse,
   AdminSettingsResponse,
@@ -20,6 +21,7 @@ async function adminItem(id: string, headers: Record<string, string>): Promise<A
 
 describe("親の権限（A18）", () => {
   it("親セッションなしでは管理 API を使えない", async () => {
+    expect((await get("/api/admin/items")).status).toBe(401);
     expect((await get("/api/admin/items/it-gym-spot")).status).toBe(401);
     expect((await get("/api/admin/settings")).status).toBe(401);
     expect((await sendJson("PATCH", "/api/admin/items/it-gym-spot", { version: 1, rain_policy: "ok" })).status).toBe(401);
@@ -83,6 +85,18 @@ describe("親の権限（A18）", () => {
 });
 
 describe("候補の編集", () => {
+  it("一覧は下書き・非表示も含めて返し、下書きを先頭にする", async () => {
+    const headers = await parentLogin();
+    const res = await get("/api/admin/items", { headers });
+    expect(res.status).toBe(200);
+    const { items }: AdminItemListResponse = await res.json();
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM items").first<{ n: number }>();
+    expect(items).toHaveLength(count!.n);
+    expect(items[0]).toMatchObject({ id: "it-draft", publish_status: "draft", place_id: "pl-sample-park" });
+    expect(items[0]!.place_name).toBeTruthy();
+    expect(items.at(-1)).toMatchObject({ id: "it-hidden", publish_status: "hidden" });
+  });
+
   it("指定した項目だけを変え、版を上げ、保存は変えない", async () => {
     const headers = await parentLogin();
     const before = await adminItem("it-woodshop-spot", headers);

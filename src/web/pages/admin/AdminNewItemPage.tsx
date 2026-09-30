@@ -1,16 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { Link, useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
-import { createItem, endAdminSession, fetchAdminPlaces } from "../../api";
+import { useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router";
+import { createItem, fetchAdminPlaces } from "../../api";
 import { AdminFrame, requireParentSession, SaveMessage, useSave } from "./common";
 
-export async function adminHomeLoader(args: LoaderFunctionArgs) {
-  const session = await requireParentSession(args);
+export async function adminNewItemLoader(args: LoaderFunctionArgs) {
+  await requireParentSession(args);
   const { places } = await fetchAdminPlaces(args.request.signal);
-  return { session, places };
+  return { places };
 }
 
-export function AdminHomePage() {
-  const { session, places } = useLoaderData<typeof adminHomeLoader>();
+export function AdminNewItemPage() {
+  const { places } = useLoaderData<typeof adminNewItemLoader>();
   const navigate = useNavigate();
   const { status, run } = useSave();
   const [title, setTitle] = useState("");
@@ -33,29 +33,16 @@ export function AdminHomePage() {
     if (ok && created) navigate(`/admin/items/${encodeURIComponent((created as { id: string }).id)}`);
   }
 
-  async function logout() {
-    await endAdminSession().catch(() => undefined);
-    navigate("/search");
-  }
-
   return (
-    <AdminFrame title="管理">
+    <AdminFrame title="候補を追加">
       <p className="muted">
-        親の確認は {session.expires_at ? new Date(session.expires_at).toLocaleTimeString("ja-JP") : "-"} まで有効です。
+        追加のしかたは 2 通りあります。1 件ずつならこの画面で、まとめて集めるなら Claude Code に頼みます。
       </p>
-      <div className="admin-menu">
-        <Link className="secondary-button" to="/admin/settings">
-          家族の設定（出発地・自転車の上限）
-        </Link>
-        <button type="button" className="secondary-button" onClick={logout}>
-          親の確認を終える
-        </button>
-      </div>
 
       <section className="section">
-        <h2 className="section-title">候補を手動で追加</h2>
+        <h3 className="admin-subtitle">1 件ずつ追加する</h3>
         <p className="muted">
-          名前・URL・場所だけで追加できます。分からない項目は「未確認」のまま登録され、あとから編集できます。
+          名前・URL・場所だけで追加でき、すぐに家族の画面に出ます。分からない項目は「未確認」のまま登録され、あとから編集できます。
           （イベントは次のフェーズで対応します）
         </p>
         <form className="form" onSubmit={submit}>
@@ -90,15 +77,26 @@ export function AdminHomePage() {
               <input value={newPlaceName} onChange={(e) => setNewPlaceName(e.target.value)} placeholder="場所の名前" required />
             )}
           </fieldset>
-          <button
-            type="submit"
-            className="link-button"
-            disabled={status.kind === "saving"}
-          >
+          <button type="submit" className="link-button" disabled={status.kind === "saving"}>
             追加して編集へ
           </button>
           <SaveMessage status={status} onReload={() => navigate(0)} />
         </form>
+      </section>
+
+      <section className="section admin-note">
+        <h3 className="admin-subtitle">まとめて集めて追加する（登録の承認）</h3>
+        <p>
+          施設をまとめて集める取り込みの承認は、<strong>この管理画面ではなく Claude Code とのやり取りの中</strong>で行います。
+        </p>
+        <ol>
+          <li>Claude Code に「お出かけ先を集めて」「この URL を候補に追加して」と頼む</li>
+          <li>新規・既存・要確認の一覧（プレビュー）がチャットに出るので、登録してよい番号を伝える</li>
+          <li>写真は、案内される確認ページ（review.html）で採用する番号を選んで伝える</li>
+        </ol>
+        <p className="muted">
+          承認して登録された候補は「候補の一覧」タブに並び、内容の修正や非表示への切り替えはそこから行えます。
+        </p>
       </section>
     </AdminFrame>
   );
