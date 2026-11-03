@@ -6,7 +6,7 @@
 保存は家族で 1 つを共有する（プロフィールはない）。
 
 構成: React + Vite（画面） / Hono on Cloudflare Workers（API） / D1（データ） / 非公開 R2（写真） / Leaflet + 地理院タイル（地図）。
-候補の取り込みは、リポジトリ内のスキルと固定の登録コマンドで手動実行する（本番への書き込みは未対応）。
+候補の取り込みは、リポジトリ内のスキルと固定の登録コマンドで手動実行する（本番へは親の承認後に `--target production --confirm` で登録し、候補は下書き・写真は採用待ちで入る）。
 
 ## ローカル開発
 
@@ -83,7 +83,9 @@ pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0
 - 取り込みは新しい候補を INSERT するだけで、既存の候補・場所・親の修正・お気に入り・家族設定を変更しない（テストで確認）。
 - 同じ出典キー（`source_id` + `source_key`）は登録済みとしてスキップ。タイトルや場所名だけの一致は要確認にする。
 - 候補ごとに 1 トランザクション。途中で失敗しても、同じコマンドの再実行で残りを完了できる。
-- `--target staging / production` は、収集用の環境と本番の認証情報を分ける方式を決めるまで無効。
+- `--target` は `local` か `production`。本番への書き込み（run・apply・geocode --apply・distances・photos-fetch・enrich-apply）には `--confirm` が必要（親の承認後に付ける。手順は [docs/production.md](docs/production.md) の「8. 今後の取り込み」）。
+- 終了コード（全コマンド共通）: 0 は成功、1 は失敗（検証 NG・登録の失敗など）、2 は使い方の誤り（引数・`--target` の指定・本番での `--confirm` の不足など）。
+  `run` だけは 3 もあり、一部の候補の登録に失敗したか、写真の取得に失敗があったことを表す（再実行で残りを完了できる）。
 - Claude Code から使うには `.claude/skills/collect-outings/SKILL.md` に原本へのリンクを置く（下記）。
 
 ```bash

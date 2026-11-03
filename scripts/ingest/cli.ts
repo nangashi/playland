@@ -17,8 +17,10 @@
  *   pnpm ingest enrich-preview  <enrich.json> --target local   埋める項目・変えない項目の一覧
  *   pnpm ingest enrich-apply    <enrich.json> --target local --accept 0,2|all  空欄だけを埋める
  *
- * --target production は wrangler login の認証で本番の D1・R2 に接続する。
+ * --target production は、環境変数 CLOUDFLARE_API_TOKEN があれば HTTP API で、なければ wrangler login の認証
+ * （リモートバインディング）で本番の D1・R2 に接続する。
  * 本番への書き込み（run / apply / geocode --apply / distances / photos-fetch / enrich-apply）には --confirm が必要。
+ * 終了コードは README.md の「候補の取り込み」を参照。
  *
  * 取り込んだ候補は下書き、写真は採用待ちで保存され、家族の画面には出ない。
  * 親は管理画面の「承認待ち」（/admin/inbox）で内容と写真を確認し、公開・見送りを決める。
