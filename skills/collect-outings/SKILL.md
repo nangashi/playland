@@ -77,6 +77,7 @@ pnpm ingest sources                       # 収集元（config/sources.yaml）
 | `source.source_key` | 出典内でスポットを識別する安定したキー。出典側の ID があればそれ、なければ施設名など。**同じ URL に複数のスポットが載っている場合はキーを分ける** |
 | `place` | 必須。既知の場所の中のスポット（大きな公園の一角など）なら `existing_place_id` だけを指定（住所等は書いても反映されない）。新しい場所は `name` |
 | `item.kind` | `spot` のみ |
+| `item.title_reading` | 候補名（`item.title`）の読みを **ひらがな** で（長音「ー」・空白は可。カタカナ・英字・数字は読みに直す）。管理画面の検索用で、根拠は不要。読みに自信がなければ `null` にして `needs_review` に「読みが不明」と書く（未記入は検証で警告になるが登録はできる） |
 | `item.child_description` | 一覧に出る紹介文（120 文字以内・通常の漢字かな交じり）。ページに書かれている内容に基づく |
 | `item.tag_ids` | `pnpm ingest tags` の ID だけ。合うものがなければ `suggested_tags` に提案を書く。判定したら `*_tags_status: "assessed"` |
 | `item.rain_policy` | **目的の遊び・体験を雨でもできるか**。屋外中心なら屋内部分が少しあっても `ok` にしない。「雨天決行」は「濡れずに遊べる」ではない。根拠がなければ `unknown` |
@@ -148,6 +149,8 @@ pnpm ingest photos-fetch <photos>.json --target local   # 写真を取得して�
 
    各候補の `missing`（空欄の項目）・`photo_count`（写真の枚数）・`current`（今の値）・`official_url`・場所の名前を読む。
    `missing` が空で `photo_count` が 0 の候補は、写真だけを探す。
+   読み（`title_reading`）が未記入の候補も `missing` に挙がる。既存の候補の読みの埋め戻しはこの流れで行う
+   （取り込み済みの候補も含めるには `--all`）。
 2. 公式ページ（`official_url`。なければ施設名で公式サイトを探す）を開いて、**空欄の項目だけ** を調べる。
    別の施設と取り違えないよう、施設名・場所が一致するページか確かめる。自信がなければ書かずに `needs_review` に書く。
 3. `.local/ingest/enrich-<番号>.json` に書く（形式は `fixtures/ingest/sample-enrich.json` と `src/ingest/enrich.ts`）。
@@ -157,6 +160,7 @@ pnpm ingest photos-fetch <photos>.json --target local   # 写真を取得して�
    | `item_id` / `version` | `incomplete.json` の値をそのまま。版が変わっていたら登録されない（書き出し直す） |
    | `source.source_id` | 公式ページは `official-site`、親が渡した URL は `parent_url` |
    | `item` | 分かった項目だけを書く。**分からない項目は `unknown` にせず省略する**。項目の意味は上の「判断のルール」と同じ |
+   | `item.title_reading` | `missing` に `title_reading` があれば、候補名の読みをひらがなで（既存の候補の読みの埋め戻し。ルールは「判断のルール」と同じ・根拠は不要）。自信がなければ省略して `needs_review` に書く |
    | タグ | `facility_tag_ids` / `experience_tag_ids`。書いた分類は「判定済み」になる（該当なしなら空配列）。未判定の分類だけが対象 |
    | `place.address_text` | 場所の住所が空欄のときだけ。公式のアクセスページの記載。座標は書かない（あとで geocode） |
    | `evidence` | 雨天・年齢・同伴や参加条件・予約・料金・住所を書いたら根拠が必須（`item.rain_policy` / `item.age` / `item.eligibility` / `item.reservation` / `item.price` / `place.address`） |

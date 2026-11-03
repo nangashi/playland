@@ -4,7 +4,7 @@
  */
 export interface KnownData {
   places: { id: string; name: string }[];
-  items: { id: string; kind: string; title: string; place_id: string | null }[];
+  items: { id: string; kind: string; title: string; title_reading: string | null; place_id: string | null }[];
   sources: { source_id: string; source_key: string; url: string; item_id: string | null }[];
 }
 
@@ -13,7 +13,7 @@ export async function loadKnown(db: D1Database): Promise<KnownData> {
     db.prepare(`SELECT id, name FROM places ORDER BY name, id`).all<KnownData["places"][number]>(),
     db
       .prepare(
-        `SELECT id, kind, title, place_id FROM items ORDER BY created_at, id`,
+        `SELECT id, kind, title, title_reading, place_id FROM items ORDER BY created_at, id`,
       )
       .all<KnownData["items"][number]>(),
     db

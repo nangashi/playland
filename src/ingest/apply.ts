@@ -68,17 +68,18 @@ export function planCandidate(
   }
 
   stmts.push({
-    sql: `INSERT INTO items (id, kind, place_id, title, child_description, rain_policy, publish_status,
+    sql: `INSERT INTO items (id, kind, place_id, title, title_reading, child_description, rain_policy, publish_status,
                              official_url, facility_tags_status, experience_tags_status,
                              age_min_kind, age_min, age_max_kind, age_max, eligibility_raw_text,
                              guardian_rule, sibling_rule, recommended_age_min, recommended_age_max,
                              reservation_requirement, reservation_note, price_status, price_text,
                              initialized_at, created_at, updated_at)
-          VALUES (?, 'spot', ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, 'spot', ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       ids.itemId,
       placeId,
       item.title,
+      item.title_reading,
       item.child_description,
       item.rain_policy,
       item.official_url ?? source.url,

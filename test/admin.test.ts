@@ -8,6 +8,8 @@ import type {
   ItemDetailResponse,
   ItemListResponse,
 } from "../src/domain/api";
+import { filterAdminItems } from "../src/domain/admin";
+import type { PublishStatus } from "../src/domain/model";
 import { app } from "../src/server/app";
 import { get, ORIGIN, parentLogin, seed, sendJson } from "./helpers";
 
@@ -95,6 +97,43 @@ describe("候補の編集", () => {
     expect(items[0]).toMatchObject({ id: "it-draft", publish_status: "draft", place_id: "pl-sample-park" });
     expect(items[0]!.place_name).toBeTruthy();
     expect(items.at(-1)).toMatchObject({ id: "it-hidden", publish_status: "hidden" });
+  });
+
+  it("一覧の文字列絞り込み: 名前・読み・場所名・住所から、下書き・非表示も含めて探せる", async () => {
+    const headers = await parentLogin();
+    await env.DB.prepare("UPDATE items SET title_reading = 'さんぷるわんすいぞくかん' WHERE id = 'it-aquarium-spot'").run();
+    const { items }: AdminItemListResponse = await (await get("/api/admin/items", { headers })).json();
+    expect(items.find((i) => i.id === "it-aquarium-spot")).toMatchObject({
+      title_reading: "さんぷるわんすいぞくかん",
+      place_address: "サンプル市みなと町5",
+    });
+    expect(items.find((i) => i.id === "it-gym-spot")).toMatchObject({ title_reading: null, place_address: null });
+
+    const ids = (query: string, status: PublishStatus | null = null) =>
+      filterAdminItems(items, { status, query }).map((i) => i.id);
+    // 読み（カタカナで打っても一致）
+    expect(ids("スイゾクカン")).toEqual(["it-aquarium-spot"]);
+    // 住所（全角数字・空白区切りの AND）
+    expect(ids("みなと町 ５")).toEqual(["it-aquarium-spot"]);
+    expect(ids("みなと町 もり町")).toEqual([]);
+    // 場所名で、下書き・非表示の候補も出る
+    expect(ids("森林公園")).toEqual(expect.arrayContaining(["it-draft", "it-hidden", "it-park-spot"]));
+    expect(ids("森林公園", "hidden")).toEqual(["it-hidden"]);
+    // 空の検索は状態の絞り込みだけ
+    expect(ids("  ")).toHaveLength(items.length);
+  });
+
+  it("読みを保存でき、空にすると NULL。ひらがな以外は 400", async () => {
+    const headers = await parentLogin();
+    const patch = async (title_reading: unknown) => {
+      const { item } = await adminItem("it-kids-spot", headers);
+      return sendJson("PATCH", "/api/admin/items/it-kids-spot", { version: item.version, title_reading }, headers);
+    };
+    expect((await patch("さんぷるしみなみじどうかん")).status).toBe(200);
+    expect((await adminItem("it-kids-spot", headers)).item.title_reading).toBe("さんぷるしみなみじどうかん");
+    expect((await patch("サンプル")).status).toBe(400);
+    expect((await patch("")).status).toBe(200);
+    expect((await adminItem("it-kids-spot", headers)).item.title_reading).toBeNull();
   });
 
   it("指定した項目だけを変え、版を上げ、保存は変えない", async () => {

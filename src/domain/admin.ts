@@ -17,6 +17,9 @@ import {
   transportModes,
 } from "./model";
 import { isKnownTagId } from "./tags";
+import { isReading, matchesAllTerms, READING_ERROR, searchTerms } from "./textMatch";
+import type { AdminItemSummary } from "./api";
+import type { PublishStatus } from "./model";
 
 /** 親の編集入力。API と画面で共有し、サーバーでも必ず検証する */
 
@@ -44,11 +47,17 @@ const optionalUrl = z
   .transform((v) => (v === "" || v === null ? null : v))
   .optional();
 const age = z.number().int().min(0).max(120);
+/** 候補名の読み（ひらがな）。空文字は null */
+const optionalReading = z
+  .union([z.string().trim().max(200).refine((v) => v === "" || isReading(v), READING_ERROR), z.null()])
+  .transform((v) => (v === null || v === "" ? null : v))
+  .optional();
 
 export const itemPatchSchema = z
   .object({
     version: z.number().int().min(1),
     title: text(200).min(1).optional(),
+    title_reading: optionalReading,
     child_description: optionalText(300),
     rain_policy: z.enum(rainPolicies).optional(),
     publish_status: z.enum(publishStatuses).optional(),
@@ -81,6 +90,7 @@ export type ItemPatch = z.infer<typeof itemPatchSchema>;
 /** items の列として直接更新できる項目（tag_ids / version は別処理） */
 export const ITEM_PATCH_COLUMNS = [
   "title",
+  "title_reading",
   "child_description",
   "rain_policy",
   "publish_status",
@@ -240,3 +250,19 @@ export const inboxDecisionSchema = z
   })
   .strict();
 export type InboxDecisionInput = z.input<typeof inboxDecisionSchema>;
+
+/**
+ * 管理画面の候補一覧の絞り込み（画面側で実行）。公開状態（null=すべて）と文字列検索。
+ * 文字列は候補名・読み・場所名・場所の住所を対象に、空白で分けた語の AND 部分一致（表記ゆれを吸収）
+ */
+export function filterAdminItems<T extends AdminItemSummary>(
+  items: readonly T[],
+  filter: { status: PublishStatus | null; query: string },
+): T[] {
+  const terms = searchTerms(filter.query);
+  return items.filter(
+    (i) =>
+      (filter.status === null || i.publish_status === filter.status) &&
+      matchesAllTerms([i.title, i.title_reading, i.place_name, i.place_address], terms),
+  );
+}

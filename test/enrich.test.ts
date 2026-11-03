@@ -59,7 +59,8 @@ describe("enrich-export（空欄の残る候補）", () => {
     await env.DB.batch([
       env.DB.prepare(`UPDATE items SET official_url = 'https://example.com/kids', guardian_rule = 'not_required',
                         sibling_rule = 'allowed', recommended_age_min = 0, recommended_age_max = 12,
-                        reservation_note = 'なし', price_text = '無料' WHERE id = 'it-kids-spot'`),
+                        reservation_note = 'なし', price_text = '無料', title_reading = 'さんぷるしみなみじどうかん'
+                        WHERE id = 'it-kids-spot'`),
       env.DB.prepare(`INSERT INTO media (id, r2_key, place_id, kind, content_type, byte_size, sha256, created_at)
                       VALUES ('m-place', 'media/m-place', 'pl-sample-science', 'venue', 'image/png', 1, 'x', 'x')`),
     ]);
@@ -68,6 +69,28 @@ describe("enrich-export（空欄の残る候補）", () => {
     expect(kids).toMatchObject({ missing: [], photo_count: 0 });
     expect(items.find((i) => i.item_id === "it-science-spot")?.photo_count).toBe(1);
     expect(JSON.stringify(kids.current)).not.toContain("photo_count");
+  });
+
+  it("読み（title_reading）の未記入を空欄として書き出し、補足で埋められる", async () => {
+    const items = await loadIncomplete(env.DB);
+    const gym = items.find((i) => i.item_id === "it-gym-spot")!;
+    expect(gym.missing).toContain("title_reading");
+    expect(gym.current.title_reading).toBeNull();
+
+    const b = clone();
+    b.updates[0]!.item.title_reading = "さんぷるくらいみんぐじむ";
+    expect(errorsOf(b)).toEqual([]);
+    const { plans } = await previewEnrich(env.DB, parsed(b));
+    expect(plans[0]!.fills.map((f) => f.field)).toContain("title_reading");
+    await apply(b, [0]);
+    const row = await env.DB.prepare(`SELECT title_reading FROM items WHERE id = 'it-gym-spot'`).first();
+    expect(row).toEqual({ title_reading: "さんぷるくらいみんぐじむ" });
+    expect((await loadIncomplete(env.DB)).find((i) => i.item_id === "it-gym-spot")!.missing).not.toContain("title_reading");
+
+    // ひらがな以外の読みは拒否
+    const bad = clone();
+    bad.updates[0]!.item.title_reading = "サンプルクライミングジム";
+    expect(errorsOf(bad).join()).toMatch(/ひらがな/);
   });
 
   it("既定では通常の取り込みで登録した候補を除き、--all で含める", async () => {

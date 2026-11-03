@@ -11,6 +11,7 @@ export function makeItem(id: string, overrides: Partial<ItemRecord> = {}): ItemR
     kind: "spot",
     place_id: `pl-${id}`,
     title: id,
+    title_reading: null,
     child_description: null,
     rain_policy: "unknown",
     publish_status: "published",
