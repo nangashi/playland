@@ -180,7 +180,24 @@ pnpm ingest geocode --target production --apply --confirm     # 住所を埋め�
 pnpm ops backup --target production
 ```
 
-- 本番への書き込み（run・apply・geocode --apply・distances・photos-fetch・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
+タグ再編のあとで既存の候補のタグを付け直すとき（手順は同じスキルの「既存の候補のタグを付け直す」）:
+
+```bash
+pnpm ops backup --target production                                        # 事前
+pnpm ingest retag-export   --target production                             # .local/ingest/retag-candidates.json
+pnpm ingest retag-validate .local/ingest/retag-<batch>.json
+pnpm ingest retag-preview  .local/ingest/retag-<batch>.json --target production   # 親に見せて承認を得る
+pnpm ingest retag-apply    .local/ingest/retag-<batch>.json --target production --confirm --accept 0,2
+pnpm ingest retag-preview  .local/ingest/retag-<batch>.json --target production   # 全件「変更なし」を確認
+pnpm ops backup --target production                                        # 事後
+```
+
+- 書き換えるのはタグ（`item_tags`）と候補の版・更新日時だけ。結果は `.local/ingest/retag-<batch>.result.json`、
+  戻し用の入力は `.local/ingest/retag-<batch>.undo.json`（外した未定義のタグは戻し用に入らないので、戻すには事前のバックアップを使う）。
+- 終了コード 3 は一部のエントリを適用できなかったこと（書き出し後に変更された候補などは retag-export からやり直す）。
+
+- 本番への書き込み（run・apply・geocode --apply・distances・photos-fetch・enrich-apply・retag-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
+  `retag-apply` は、親が承認した番号の `--accept`（すべてなら `all`）も必須。
   エージェントは親の承認（「本番に取り込んで」等の指示）を得てから `--confirm` を付ける。
 
 ### 本番への接続

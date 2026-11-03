@@ -69,11 +69,22 @@ pnpm ingest photos-fetch .local/ingest/<photos>.json --target local   # 写真�
 pnpm ingest enrich-export --target local [--all]                  # 空欄の残る候補（既定は管理画面で追加した候補）
 pnpm ingest enrich-preview .local/ingest/<enrich>.json --target local
 pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0,2|all
+pnpm ingest retag-export   --target local                         # 既存の候補の今のタグ・カテゴリ・出典キー
+pnpm ingest retag-validate .local/ingest/retag-<batch>.json        # 付け直し用 JSON の検証（DB を見ない）
+pnpm ingest retag-preview  .local/ingest/retag-<batch>.json --target local   # 今のタグ → 変更後・カテゴリの変化
+pnpm ingest retag-apply    .local/ingest/retag-<batch>.json --target local [--accept 0,2|all]
 ```
 
 - 補足（enrich）は、既存の候補の空欄（unknown・null・未判定のタグ・場所の住所）だけを埋める。値の入った項目は変えず、
   書き出したときの版と一致する候補だけを更新する。親の確認日時は変えず、根拠は出典（`source_entries`）に残す。
   写真のない候補も書き出し、写真リストでは出典キーの代わりに `item_id` で候補を指定できる（取得と採用待ちでの保存は photos-fetch）。
+- タグの付け直し（retag）は、タグ再編（タグの廃止・追加）のあとに既存の候補のタグだけを増減（`add` / `remove`）で書き換える。
+  候補は出典キー（`source_id` + `source_key`、出典のない候補は `item_id`）で指し、タイトルと書き出したときの版が一致するときだけ書く。
+  書き換えるのは `item_tags` と候補の版・更新日時だけで、他の項目・判定状況（`*_tags_status`）・親の確認日時は変えない。
+  適用済みのエントリは「変更なし」になり、再実行しても変わらない。変更履歴は操作者 `ingest:retag:<batch_id>`。
+  結果（前後のタグ）は `.local/ingest/retag-<batch>.result.json`、戻し用の入力（add と remove を入れ替えたもの）は
+  `.local/ingest/retag-<batch>.undo.json` に書き出す（既にあれば `.2` などを付けて上書きしない。外した未定義のタグは戻し用に入らない）。
+  形式は `fixtures/ingest/sample-retag.json` と `src/ingest/retag.ts`。
 
 - 写真は家族内の私的な利用として、掲載ページ・画像 URL・クレジットを記録して非公開 R2 に「採用待ち」で保存する。
   親が承認待ちの画面で採用したものだけを表示し、採用しなかったものは消す。
@@ -83,9 +94,12 @@ pnpm ingest enrich-apply   .local/ingest/<enrich>.json --target local --accept 0
 - 取り込みは新しい候補を INSERT するだけで、既存の候補・場所・親の修正・お気に入り・家族設定を変更しない（テストで確認）。
 - 同じ出典キー（`source_id` + `source_key`）は登録済みとしてスキップ。タイトルや場所名だけの一致は要確認にする。
 - 候補ごとに 1 トランザクション。途中で失敗しても、同じコマンドの再実行で残りを完了できる。
-- `--target` は `local` か `production`。本番への書き込み（run・apply・geocode --apply・distances・photos-fetch・enrich-apply）には `--confirm` が必要（親の承認後に付ける。手順は [docs/production.md](docs/production.md) の「8. 今後の取り込み」）。
+- `--target` は `local` か `production`。本番への書き込み（run・apply・geocode --apply・distances・photos-fetch・enrich-apply・retag-apply）には `--confirm` が必要（親の承認後に付ける。手順は [docs/production.md](docs/production.md) の「8. 今後の取り込み」）。
+  本番の `retag-apply` は、親が承認した番号の `--accept` も必須。
 - 終了コード（全コマンド共通）: 0 は成功、1 は失敗（検証 NG・登録の失敗など）、2 は使い方の誤り（引数・`--target` の指定・本番での `--confirm` の不足など）。
-  `run` だけは 3 もあり、一部の候補の登録に失敗したか、写真の取得に失敗があったことを表す（再実行で残りを完了できる）。
+  `run` と `retag-apply` は 3 もある。`run` は一部の候補の登録に失敗したか、写真の取得に失敗があったこと、`retag-apply` は
+  一部のエントリを適用できなかった（書き出し後の変更・タイトル不一致・候補なし・DB エラー）ことを表す（再実行で残りを完了できる）。
+  `retag-apply` は、適用できたものがなく失敗だけがあるとき 1、検証 NG も 1、本番で `--confirm` / `--accept` がないときは 2。
 - Claude Code から使うには `.claude/skills/collect-outings/SKILL.md` に原本へのリンクを置く（下記）。
 
 ```bash
