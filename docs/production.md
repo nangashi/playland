@@ -9,7 +9,8 @@
 - 管理（編集）はアプリ内の PIN で入る。
 - Worker は Access の検証を自分でも行い（`ctx.access` の aud 一致、なければ `Cf-Access-Jwt-Assertion` の JWT を検証）、
   `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` が空なら全リクエストを 503 で拒否する。Access の設定前にデプロイしても公開状態にはならない。
-- Cloudflare への操作はすべて、自分の Cloudflare ログイン（wrangler と cf）で行う。
+- 初期構築と運用の Cloudflare への操作は、自分の Cloudflare ログイン（wrangler と cf）で行う。
+  データの取り込みは API トークン（`CLOUDFLARE_API_TOKEN`）でも接続できる（「8. 今後の取り込み」の「本番への接続」）。
 
 ## 0. 準備（一度だけ）
 
@@ -142,10 +143,11 @@ pnpm ops backup --target production                    # .local/backups/producti
 
 - `pnpm deploy` は pnpm の組み込みコマンドなので、`pnpm run deploy` を使う。手元からのデプロイは「9. リリース」の例外のときだけ。
 - ローカルの D1 は `preview_database_id`（`0000…`）の鍵で保存している。`database_id`（本番）を変えてもローカルのデータは変わらない。
-- `--target production` はリモートバインディングで本番の D1・R2 に接続する。中継用のプレビュー Worker 名は `playland-cli-remote`
+- `--target production` は、環境変数 `CLOUDFLARE_API_TOKEN` があれば Cloudflare の HTTP API で、なければ wrangler のリモートバインディングで
+  本番の D1・R2 に接続する（「本番への接続」）。リモートバインディングの中継用のプレビュー Worker 名は `playland-cli-remote`
   （アプリ本体の `playland` は Worker 単位の Access でプレビューまで保護されているため、名前を分けている）。
 - ネットワークや設定ディレクトリが制限された環境（コーディングエージェントのサンドボックス等）では、リモートバインディングが動かないことがある。
-  その場合は自分のターミナルで実行する。
+  その場合は `CLOUDFLARE_API_TOKEN` を渡して HTTP API で接続するか（サンドボックスからも動く）、自分のターミナルで実行する。
 
 ## 8. 今後の取り込み
 
@@ -178,7 +180,7 @@ pnpm ingest geocode --target production --apply --confirm     # 住所を埋め�
 pnpm ops backup --target production
 ```
 
-- 本番への書き込み（run・apply・geocode --apply・photos-fetch・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
+- 本番への書き込み（run・apply・geocode --apply・distances・photos-fetch・enrich-apply・copy-to-production・restore）は `--confirm` がないと実行されない。
   エージェントは親の承認（「本番に取り込んで」等の指示）を得てから `--confirm` を付ける。
 
 ### 本番への接続
