@@ -288,7 +288,7 @@ describe("apply（登録）", () => {
     const r = await apply(sample);
     const id = r.outcomes[1]!.item_id!;
     await publishDrafts();
-    const list: ItemListResponse = await (await get("/api/items?category=park")).json();
+    const list: ItemListResponse = await (await get("/api/items?category=active")).json();
     expect(list.items.map((i) => i.id)).toContain(id);
     expect((await sendJson("PUT", `/api/bookmarks/${id}`, undefined)).status).toBe(204);
   });

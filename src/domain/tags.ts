@@ -26,6 +26,8 @@ export const TAGS: readonly TagDefinition[] = [
   { id: "workshop_studio", category: "facility", label: "工房・教室" },
   { id: "community_center", category: "facility", label: "公民館・地域施設" },
   { id: "character_theme", category: "facility", label: "キャラクター・テーマ施設" },
+  { id: "amusement_park", category: "facility", label: "遊園地" },
+  { id: "shop", category: "facility", label: "買い物" },
 
   // 体験
   { id: "crafting", category: "experience", label: "工作" },
@@ -47,13 +49,13 @@ export const TAGS: readonly TagDefinition[] = [
   { id: "ball_sports", category: "experience", label: "球技" },
   { id: "music", category: "experience", label: "音楽" },
   { id: "reading", category: "experience", label: "読み聞かせ・本" },
-  { id: "vehicles", category: "experience", label: "乗りもの" },
+  { id: "rides", category: "experience", label: "アトラクション" },
   { id: "job_experience", category: "experience", label: "職業体験" },
 ];
 
 /**
  * 画面で選ぶカテゴリ。1 つだけ選び、含まれるタグのどれかに当てはまれば一致とする。
- * 施設分類と体験をまたいでよい（例：動物・生きもの＝動物園・水族館・牧場・ふれあい体験）。
+ * 施設分類と体験をまたいでよい（例：生き物＝動物園・水族館・牧場・ふれあい体験）。
  * 画面の分け方（カテゴリ）と内部の分類（タグ）を分けて、あとから対応を変えられるようにする。
  */
 export interface CategoryDefinition {
@@ -63,21 +65,36 @@ export interface CategoryDefinition {
 }
 
 export const CATEGORIES: readonly CategoryDefinition[] = [
-  { id: "park", label: "公園", tagIds: ["park"] },
-  { id: "museum", label: "科学館・博物館", tagIds: ["science_museum", "museum", "experiment", "microscope", "stargazing"] },
-  {
-    id: "animals",
-    label: "動物・生きもの",
-    tagIds: ["zoo", "aquarium", "farm", "animals", "insects", "aquatic_life"],
-  },
-  { id: "make", label: "工作・ものづくり", tagIds: ["crafting", "woodwork", "cooking", "art", "workshop_studio"] },
   {
     id: "active",
-    label: "体を動かす",
+    label: "運動あそび",
     tagIds: ["athletic", "climbing", "ball_sports", "water_play", "hiking", "sports_facility", "indoor_playground"],
   },
-  { id: "music-books", label: "音楽・絵本", tagIds: ["music", "reading"] },
-  { id: "theme", label: "テーマ施設・体験", tagIds: ["character_theme", "job_experience"] },
+  {
+    id: "animals",
+    label: "生き物",
+    tagIds: ["zoo", "aquarium", "farm", "animals", "insects", "aquatic_life"],
+  },
+  { id: "attractions", label: "アトラクション", tagIds: ["rides", "amusement_park"] },
+  {
+    id: "make",
+    label: "体験・ものづくり",
+    tagIds: [
+      "crafting",
+      "woodwork",
+      "cooking",
+      "art",
+      "experiment",
+      "microscope",
+      "harvesting",
+      "job_experience",
+      "workshop_studio",
+    ],
+  },
+  { id: "museum", label: "展示・見学", tagIds: ["science_museum", "museum", "stargazing", "character_theme"] },
+  { id: "nature", label: "自然遊び", tagIds: ["nature_observation", "hiking", "insects", "stargazing", "harvesting"] },
+  { id: "music-books", label: "絵本・音楽", tagIds: ["music", "reading", "library"] },
+  { id: "shopping", label: "買い物", tagIds: ["shop", "character_theme"] },
 ];
 
 const tagById = new Map(TAGS.map((t) => [t.id, t]));
