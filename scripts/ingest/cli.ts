@@ -16,20 +16,25 @@
  *   pnpm ingest enrich-validate <enrich.json>          補足用 JSON の検証（DB を見ない）
  *   pnpm ingest enrich-preview  <enrich.json> --target local   埋める項目・変えない項目の一覧
  *   pnpm ingest enrich-apply    <enrich.json> --target local --accept 0,2|all  空欄だけを埋める
+ *   pnpm ingest retag-export   --target local           既存の候補の今のタグ・カテゴリ・出典キーを書き出す
+ *   pnpm ingest retag-validate <retag.json>             付け直し用 JSON の検証（DB を見ない）
+ *   pnpm ingest retag-preview  <retag.json> --target local   今のタグ → 変更後のタグ・カテゴリの一覧
+ *   pnpm ingest retag-apply    <retag.json> --target local [--accept 0,2|all]  タグだけを付け直す
+ *                                                     （本番は --confirm と --accept が必須。結果と戻し用 JSON を書き出す）
  *
  * --target production は、環境変数 CLOUDFLARE_API_TOKEN があれば HTTP API で、なければ wrangler login の認証
  * （リモートバインディング）で本番の D1・R2 に接続する。
- * 本番への書き込み（run / apply / geocode --apply / distances / photos-fetch / enrich-apply）には --confirm が必要。
+ * 本番への書き込み（run / apply / geocode --apply / distances / photos-fetch / enrich-apply / retag-apply）には --confirm が必要。
  * 終了コードは README.md の「候補の取り込み」を参照。
  *
  * 取り込んだ候補は下書き、写真は採用待ちで保存され、家族の画面には出ない。
  * 親は管理画面の「承認待ち」（/admin/inbox）で内容と写真を確認し、公開・見送りを決める。
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { CATEGORIES, TAGS } from "../../src/domain/tags";
+import { CATEGORIES, getTag, TAGS } from "../../src/domain/tags";
 import { applyBundle, previewBundle } from "../../src/ingest/apply";
 import { validateBundle, type BundleValidation } from "../../src/ingest/bundle";
 import {
@@ -41,6 +46,16 @@ import {
 } from "../../src/ingest/enrich";
 import { geocodePlaces, gsiGeocoder } from "../../src/ingest/geocode";
 import { loadKnown } from "../../src/ingest/known";
+import {
+  applyRetag,
+  buildUndo,
+  loadRetagCandidates,
+  previewRetag,
+  validateRetagBundle,
+  type RetagApplyResult,
+  type RetagPlan,
+  type RetagValidation,
+} from "../../src/ingest/retag";
 import { getOrigin, refreshHomeDistances } from "../../src/server/repo";
 import { openTarget, parseTarget, requireConfirm, UsageError, type TargetEnv } from "../lib/target";
 import { fetchAndStagePhotos, readPhotoList } from "./photos";
@@ -49,6 +64,8 @@ import { loadSources } from "./sources";
 const MAX_BUNDLE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_KNOWN_PATH = ".local/ingest/known.json";
 const DEFAULT_INCOMPLETE_PATH = ".local/ingest/incomplete.json";
+const DEFAULT_RETAG_EXPORT_PATH = ".local/ingest/retag-candidates.json";
+const INGEST_DIR = ".local/ingest";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -95,9 +112,20 @@ async function main(): Promise<number> {
       return withDb((db) => enrichPreview(db, requireFile()));
     case "enrich-apply":
       return withDb((db) => enrichApply(db, requireFile()), "候補の補足");
+    case "retag-export":
+      return withDb((db) => retagExport(db));
+    case "retag-validate":
+      return retagValidate(requireFile());
+    case "retag-preview":
+      return withDb((db) => retagPreview(db, requireFile()));
+    case "retag-apply": {
+      const path = requireFile();
+      requireAccept(parseTarget(values.target));
+      return withDb((db) => retagApply(db, path), "タグの付け直し");
+    }
     default:
       console.error(
-        "使い方: pnpm ingest <tags|sources|export-known|validate|run|preview|apply|geocode|distances|photos-fetch|enrich-export|enrich-validate|enrich-preview|enrich-apply> [file] --target local",
+        "使い方: pnpm ingest <tags|sources|export-known|validate|run|preview|apply|geocode|distances|photos-fetch|enrich-export|enrich-validate|enrich-preview|enrich-apply|retag-export|retag-validate|retag-preview|retag-apply> [file] --target local",
       );
       return 2;
   }
@@ -394,6 +422,187 @@ async function enrichApply(db: D1Database, path: string): Promise<number> {
     console.log(`\n結果: ${result.status}（実行 ID ${result.run_id}）`);
   }
   return result.status === "failed" ? 1 : 0;
+}
+
+// ---- タグの付け直し（retag） ----
+
+/** 本番の付け直しは、親が承認した番号（--accept）も必須にする（--confirm と同じく、エージェントは承認後に付ける） */
+function requireAccept(target: "local" | "production") {
+  if (target === "production" && !values.accept) {
+    throw new UsageError("本番のタグの付け直しには --accept（親が承認した番号。すべてなら all）が必要です");
+  }
+}
+
+const tagLabel = (id: string) => getTag(id)?.label ?? "未定義";
+const listTags = (ids: readonly string[]) => (ids.length > 0 ? ids.join(", ") : "（なし）");
+const listCategories = (ids: readonly string[]) =>
+  ids.length > 0 ? ids.map((id) => CATEGORIES.find((c) => c.id === id)?.label ?? id).join(", ") : "（なし）";
+
+async function retagExport(db: D1Database): Promise<number> {
+  const items = await loadRetagCandidates(db);
+  const out = values.out ?? DEFAULT_RETAG_EXPORT_PATH;
+  await mkdir(dirname(out), { recursive: true });
+  await writeFile(out, JSON.stringify({ exported_at: new Date().toISOString(), tags: TAGS, categories: CATEGORIES, items }, null, 2));
+  console.log(`${out} に書き出しました（候補 ${items.length} 件・非表示を除く）`);
+  const unknown = new Map<string, number>();
+  for (const i of items) for (const t of i.unknown_tag_ids) unknown.set(t, (unknown.get(t) ?? 0) + 1);
+  if (unknown.size > 0) console.log(`未定義のタグ: ${[...unknown].map(([t, n]) => `${t}（${n} 件）`).join(", ")}`);
+  const noCategory = items.filter((i) => i.categories.length === 0).length;
+  if (noCategory > 0) console.log(`どのカテゴリにも入らない候補: ${noCategory} 件`);
+  return 0;
+}
+
+function printRetagValidation(v: RetagValidation) {
+  if (v.bundle === null) {
+    console.log("✗ 形式エラー");
+    for (const e of v.formatErrors) console.log(`  - ${e}`);
+    return;
+  }
+  for (const issue of v.issues) {
+    const mark = issue.errors.length > 0 ? "✗" : "✓";
+    console.log(`${mark} #${issue.index} ${v.bundle.entries[issue.index]!.title}（${issue.ref}）`);
+    for (const e of issue.errors) console.log(`    エラー: ${e}`);
+    for (const w of issue.warnings) console.log(`    確認: ${w}`);
+  }
+}
+
+async function readValidRetag(path: string) {
+  const { raw, hash } = await readBundle(path);
+  const v = validateRetagBundle(raw);
+  if (!v.ok && !values.json) printRetagValidation(v);
+  return { raw, hash, v };
+}
+
+async function retagValidate(path: string): Promise<number> {
+  const { v } = await readValidRetag(path);
+  if (values.json) console.log(JSON.stringify(v, null, 2));
+  else if (v.ok) printRetagValidation(v);
+  return v.ok ? 0 : 1;
+}
+
+const RETAG_LABEL: Record<RetagPlan["status"], string> = {
+  update: "変更",
+  unchanged: "変更なし",
+  stale: "書き出し後に変更あり",
+  mismatch: "タイトル不一致",
+  not_found: "エラー",
+};
+
+/** 候補の ID と、JSON での指定（出典キー）。同じなら 1 つだけ */
+const idAndRef = (p: { item_id: string | null; ref: string }) =>
+  p.item_id === null ? `${p.ref}・見つからない` : p.item_id === p.ref ? p.ref : `${p.item_id} / ${p.ref}`;
+
+interface TagChangeView {
+  before: string[];
+  after: string[];
+  added: string[];
+  removed: string[];
+  categories_before: string[];
+  categories_after: string[];
+}
+
+function printTagChange(p: TagChangeView) {
+  console.log(`    タグ: ${listTags(p.before)} → ${listTags(p.after)}`);
+  for (const t of p.added) console.log(`    + ${t}（${tagLabel(t)}）`);
+  for (const t of p.removed) console.log(`    - ${t}（${tagLabel(t)}）`);
+  console.log(`    カテゴリ: ${listCategories(p.categories_before)} → ${listCategories(p.categories_after)}`);
+}
+
+async function retagPreview(db: D1Database, path: string): Promise<number> {
+  const { v } = await readValidRetag(path);
+  if (!v.ok) {
+    if (values.json) console.log(JSON.stringify(v, null, 2));
+    else console.log("\n検証エラーがあるため照合していません。");
+    return 1;
+  }
+  const result = await previewRetag(db, v.bundle);
+  const validationWarnings = new Map(v.issues.map((i) => [i.index, i.warnings]));
+  if (values.json) {
+    const plans = result.plans.map((p) => ({ ...p, warnings: [...(validationWarnings.get(p.index) ?? []), ...p.warnings] }));
+    console.log(JSON.stringify({ ...result, plans }, null, 2));
+    return 0;
+  }
+  for (const p of result.plans) {
+    console.log(`[${RETAG_LABEL[p.status]}] #${p.index} ${p.title}（${idAndRef(p)}）`);
+    if (p.status === "update" || p.status === "unchanged") printTagChange(p);
+    if (p.reason) console.log(`    理由: ${p.reason}`);
+    for (const r of p.reasons) console.log(`    ${r}`);
+    for (const w of [...(validationWarnings.get(p.index) ?? []), ...p.warnings]) console.log(`    確認: ${w}`);
+  }
+  const s = result.summary;
+  console.log(
+    `\n対象 ${s.entries} 件: 変更 ${s.update} / 変更なし ${s.unchanged} / 書き出し後に変更あり ${s.stale} / タイトル不一致 ${s.mismatch} / エラー ${s.not_found}`,
+  );
+  console.log(`item_tags: +${s.item_tags_added} / -${s.item_tags_removed}`);
+  const updatable = result.plans.filter((p) => p.status === "update").map((p) => p.index);
+  console.log(`付け直す候補: ${updatable.length > 0 ? updatable.join(",") : "なし"}`);
+  if (updatable.length > 0) console.log("親が確認した番号を retag-apply の --accept に渡してください（すべてなら --accept all）。");
+  return 0;
+}
+
+/** 既存のファイルは上書きしない（前の実行の結果・戻し用 JSON を残す）。あれば .2, .3 … を付ける */
+async function freshPath(base: string, ext: string): Promise<string> {
+  for (let n = 1; ; n++) {
+    const path = n === 1 ? `${base}${ext}` : `${base}.${n}${ext}`;
+    try {
+      await access(path);
+    } catch {
+      return path;
+    }
+  }
+}
+
+async function retagApply(db: D1Database, path: string): Promise<number> {
+  const { raw, hash, v } = await readValidRetag(path);
+  if (!v.ok) {
+    if (values.json) console.log(JSON.stringify(v, null, 2));
+    return 1;
+  }
+  const accept = !values.accept || values.accept.trim() === "all" ? "all" : parseAccept();
+  const result = await applyRetag(db, raw, { target: parseTarget(values.target), inputHash: hash, accept });
+
+  await mkdir(INGEST_DIR, { recursive: true });
+  const base = join(INGEST_DIR, `retag-${result.batch_id}`);
+  const resultPath = await freshPath(base, ".result.json");
+  await writeFile(resultPath, JSON.stringify(result, null, 2));
+  const undo = buildUndo(v.bundle, result, new Date().toISOString());
+  const undoPath = undo.bundle ? await freshPath(base, ".undo.json") : null;
+  if (undo.bundle && undoPath) await writeFile(undoPath, JSON.stringify(undo.bundle, null, 2));
+
+  if (values.json) {
+    console.log(JSON.stringify({ ...result, result_path: resultPath, undo_path: undoPath, undo_omitted: undo.omitted }, null, 2));
+  } else {
+    printRetagApplyResult(result);
+    console.log(`結果ファイル: ${resultPath}`);
+    console.log(undoPath ? `戻し用: ${undoPath}（retag-preview → retag-apply で戻せる）` : "戻し用: なし（付け直した候補がない）");
+    for (const o of undo.omitted) {
+      console.log(`  ※ #${o.index} の未定義のタグ ${o.tags.join(", ")} は戻し用に含めていません（戻すには事前のバックアップから復元）`);
+    }
+  }
+  return result.status === "failed" ? 1 : result.status === "partial" ? 3 : 0;
+}
+
+function printRetagApplyResult(result: RetagApplyResult) {
+  const label = {
+    updated: "付け直し",
+    unchanged: "変更なし",
+    skipped_not_accepted: "",
+    skipped_stale: "書き出し後に変更ありのため未適用",
+    skipped_mismatch: "タイトル不一致のため未適用",
+    error: "失敗",
+  };
+  for (const o of result.outcomes.filter((o) => o.result !== "skipped_not_accepted")) {
+    console.log(`[${label[o.result]}] #${o.index} ${o.title}（${idAndRef(o)}）`);
+    if (o.result === "updated") printTagChange(o);
+    if (o.reason) console.log(`    理由: ${o.reason}`);
+    if (o.message) console.log(`    ${o.message}`);
+    for (const w of o.warnings) console.log(`    確認: ${w}`);
+  }
+  const s = result.summary;
+  console.log(
+    `\n結果: ${result.status}（実行 ID ${result.run_id}）付け直し ${s.updated} / 変更なし ${s.unchanged} / 未承認 ${s.not_accepted} / ` +
+      `書き出し後に変更あり ${s.stale} / タイトル不一致 ${s.mismatch} / 失敗 ${s.error}`,
+  );
 }
 
 async function exportKnown(db: D1Database): Promise<number> {

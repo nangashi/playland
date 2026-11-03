@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "kind": "retag",
+  "batch_id": "sample-retag-001",
+  "created_at": "2026-11-03T00:00:00Z",
+  "entries": [
+    {
+      "source_id": "sample-city",
+      "source_key": "river-park",
+      "title": "サンプル川の親水公園",
+      "version": 1,
+      "add": ["nature_observation"],
+      "reason": "川辺で水の生きものを観察できる（自然遊びに入れる）"
+    },
+    {
+      "item_id": "it-park-spot",
+      "title": "サンプル森林公園",
+      "version": 1,
+      "add": ["rides"],
+      "remove": ["vehicles"],
+      "reason": "廃止した vehicles を外し、園内のミニ汽車はアトラクション（rides）にする"
+    },
+    {
+      "item_id": "it-gym-spot",
+      "title": "サンプルクライミングジム",
+      "version": 1,
+      "remove": ["vehicles"],
+      "reason": "廃止した vehicles を外す（乗りものの体験はない）"
+    }
+  ]
+}
