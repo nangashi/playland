@@ -46,7 +46,7 @@ describe("GET /api/items", () => {
 
   it("カテゴリと雨の日の条件で絞れる", async () => {
     const r = await list("?category=make&rain=ok");
-    expect(r.items.map((i) => i.id).sort()).toEqual(["it-kids-spot", "it-woodshop-spot"]);
+    expect(r.items.map((i) => i.id).sort()).toEqual(["it-kids-spot", "it-science-spot", "it-woodshop-spot"]);
   });
 
   it("不正な条件は 400", async () => {

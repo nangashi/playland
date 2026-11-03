@@ -17,7 +17,7 @@ import {
   type ItemRecord,
   type MediaKind,
 } from "../../../domain/model";
-import { TAGS } from "../../../domain/tags";
+import { isKnownTagId, TAGS } from "../../../domain/tags";
 import { adminMediaUrl, fetchAdminItem, fetchAdminPlaces, patchItem, setMediaStatus, uploadMedia } from "../../api";
 import { AdminFrame, numberField, numberOrNull, requireParentSession, SaveMessage, useSave } from "./common";
 
@@ -101,6 +101,8 @@ function ItemForm({
   const [form, setForm] = useState<FormState>({ item: data.item, tagIds: data.tag_ids });
   const { status, run } = save;
   const item = form.item;
+  // DB に残る未定義のタグ（タグ再編で消えたもの）はサーバーが受け付けないため、保存時に外す
+  const unknownTagIds = data.tag_ids.filter((id) => !isKnownTagId(id));
   const set = <K extends keyof ItemRecord>(key: K, value: ItemRecord[K]) =>
     setForm((f) => ({ ...f, item: { ...f.item, [key]: value } }));
 
@@ -112,7 +114,8 @@ function ItemForm({
     // 年齢の種別が「数値あり」以外なら値は消す
     if (patch.age_min_kind !== undefined && form.item.age_min_kind !== "value") patch.age_min = null;
     if (patch.age_max_kind !== undefined && form.item.age_max_kind !== "value") patch.age_max = null;
-    if (JSON.stringify([...form.tagIds].sort()) !== JSON.stringify(data.tag_ids)) patch.tag_ids = form.tagIds;
+    const tagIds = form.tagIds.filter(isKnownTagId);
+    if (JSON.stringify([...tagIds].sort()) !== JSON.stringify(data.tag_ids)) patch.tag_ids = tagIds;
     return patch as ItemPatchInput;
   }
 
@@ -204,6 +207,9 @@ function ItemForm({
 
         <fieldset>
           <legend>タグ</legend>
+          {unknownTagIds.length > 0 && (
+            <p className="hint">未定義のタグ: {unknownTagIds.join("、")}（保存時に外れます）</p>
+          )}
           {tagCategories.map((category) => {
             const statusKey = category === "facility" ? "facility_tags_status" : "experience_tags_status";
             return (
