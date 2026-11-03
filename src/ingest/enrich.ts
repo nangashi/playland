@@ -11,6 +11,7 @@ import {
   type TagCategory,
 } from "../domain/model";
 import { TAGS } from "../domain/tags";
+import { isReading, READING_ERROR } from "../domain/textMatch";
 import { MAX_EVIDENCE_TEXT } from "./bundle";
 
 /**
@@ -36,6 +37,7 @@ export interface ItemRow {
   title: string;
   publish_status: string;
   version: number;
+  title_reading: string | null;
   child_description: string | null;
   official_url: string | null;
   rain_policy: string;
@@ -58,7 +60,7 @@ export interface ItemRow {
   place_address_text: string | null;
 }
 
-const ITEM_COLUMNS = `i.id, i.kind, i.place_id, i.title, i.publish_status, i.version, i.child_description, i.official_url,
+const ITEM_COLUMNS = `i.id, i.kind, i.place_id, i.title, i.publish_status, i.version, i.title_reading, i.child_description, i.official_url,
   i.rain_policy, i.facility_tags_status, i.experience_tags_status, i.age_min_kind, i.age_min, i.age_max_kind, i.age_max,
   i.eligibility_raw_text, i.guardian_rule, i.sibling_rule, i.recommended_age_min, i.recommended_age_max,
   i.reservation_requirement, i.reservation_note, i.price_status, i.price_text,
@@ -66,6 +68,7 @@ const ITEM_COLUMNS = `i.id, i.kind, i.place_id, i.title, i.publish_status, i.ver
 
 /** 補足できる項目。unknown / null のもの（タグは分類ごとに未判定のもの）だけが対象 */
 const NULLABLE_COLUMNS = [
+  "title_reading",
   "child_description",
   "official_url",
   "eligibility_raw_text",
@@ -178,6 +181,8 @@ const known = <T extends readonly [string, ...string[]]>(values: T) =>
 
 const itemFieldsSchema = z
   .object({
+    /** 候補名の読み（ひらがな）。根拠は不要（候補名から決まる）。自信がなければ省略して needs_review に書く */
+    title_reading: shortText(200).refine(isReading, READING_ERROR).optional(),
     child_description: shortText(120).optional(),
     official_url: httpUrlSchema.optional(),
     /** 分類ごとの判定結果。書いた分類は「判定済み」になる（該当なしは空配列） */

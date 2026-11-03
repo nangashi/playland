@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLoaderData, type LoaderFunctionArgs } from "react-router";
+import { filterAdminItems } from "../../../domain/admin";
 import { publishStatuses, type PublishStatus } from "../../../domain/model";
 import { fetchAdminItems } from "../../api";
 import { AdminFrame, requireParentSession } from "./common";
@@ -18,16 +19,14 @@ export function AdminItemsPage() {
   const [query, setQuery] = useState("");
 
   const counts = Object.fromEntries(publishStatuses.map((s) => [s, items.filter((i) => i.publish_status === s).length]));
-  const q = query.trim();
-  const shown = items.filter(
-    (i) => (filter === null || i.publish_status === filter) && (q === "" || i.title.includes(q) || i.place_name?.includes(q)),
-  );
+  const shown = filterAdminItems(items, { status: filter, query });
 
   return (
     <AdminFrame title="候補の一覧">
       <p className="muted">
         登録済みの候補すべてです。名前を押すと内容を、場所名を押すと地図の位置・移動の目安を直せます。
         「下書き」（承認待ち）と「非表示」（見送ったものを含む）は家族の画面に出ません。
+        検索はカタカナ・ひらがなや全角・半角、空白・記号の違いを区別しません。空白で区切ると、すべての語を含む候補に絞ります。
       </p>
 
       <div className="admin-list-tools">
@@ -59,8 +58,8 @@ export function AdminItemsPage() {
           className="admin-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="名前・場所でさがす"
-          aria-label="名前・場所でさがす"
+          placeholder="名前・読み・場所・住所でさがす"
+          aria-label="名前・読み・場所・住所でさがす"
         />
       </div>
 

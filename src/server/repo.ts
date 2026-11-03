@@ -18,7 +18,7 @@ import { homeDistanceKm, originOf, type LatLng } from "../domain/trip";
  * 家族規模の件数を前提に、検索用のデータは一括で読み、絞り込みは domain の純粋関数で行う。
  */
 
-export const ITEM_COLUMNS = `id, kind, place_id, title, child_description, rain_policy,
+export const ITEM_COLUMNS = `id, kind, place_id, title, title_reading, child_description, rain_policy,
   publish_status, official_url, facility_tags_status, experience_tags_status, schedule_status,
   age_min_kind, age_min, age_max_kind, age_max, eligibility_raw_text, guardian_rule, sibling_rule,
   recommended_age_min, recommended_age_max, reservation_requirement, reservation_note,
@@ -37,11 +37,15 @@ export async function listPublishedItems(db: D1Database): Promise<ItemRecord[]> 
   return results;
 }
 
-/** 管理画面の一覧用。公開状態を問わず、下書き→公開→非表示、それぞれ更新の新しい順 */
+/**
+ * 管理画面の一覧用。公開状態を問わず、下書き→公開→非表示、それぞれ更新の新しい順。
+ * 文字列の絞り込みは画面側で行う（filterAdminItems）ため、検索対象の読み・住所も返す
+ */
 export async function listAdminItems(db: D1Database): Promise<AdminItemSummary[]> {
   const { results } = await db
     .prepare(
-      `SELECT i.id, i.title, i.publish_status, i.place_id, p.name AS place_name, i.updated_at
+      `SELECT i.id, i.title, i.title_reading, i.publish_status, i.place_id, p.name AS place_name,
+              p.address_text AS place_address, i.updated_at
          FROM items i LEFT JOIN places p ON p.id = i.place_id
         ORDER BY CASE i.publish_status WHEN 'draft' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
                  i.updated_at DESC, i.id`,

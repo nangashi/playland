@@ -48,6 +48,7 @@ interface FormState {
 
 const ITEM_FIELDS = [
   "title",
+  "title_reading",
   "child_description",
   "rain_policy",
   "publish_status",
@@ -155,6 +156,16 @@ function ItemForm({
           <label>
             名前
             <input value={item.title} onChange={(e) => set("title", e.target.value)} required maxLength={200} />
+          </label>
+          <label>
+            読み（ひらがな。候補一覧の検索用・空でも可）
+            <input
+              value={item.title_reading ?? ""}
+              onChange={(e) => set("title_reading", e.target.value)}
+              maxLength={200}
+              pattern="[ぁ-ゖゝゞー\s]*"
+              title="ひらがなで入力してください"
+            />
           </label>
           <label>
             紹介文（一覧に出る短い説明）

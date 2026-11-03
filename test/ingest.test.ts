@@ -83,6 +83,25 @@ describe("validate（DB を見ない検証）", () => {
     b.candidates[2]!.source.source_key = b.candidates[1]!.source.source_key;
     expect(errorsOf(b).join()).toMatch(/重複/);
   });
+
+  it("候補名の読み（title_reading）は任意。未記入は警告だけ、ひらがな以外はエラー", () => {
+    const r = validateBundle(sample);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // サンプルの 4 件目は読みなし
+    expect(r.bundle.candidates[3]!.item.title_reading).toBeNull();
+    expect(r.issues[3]!.warnings.join()).toMatch(/title_reading/);
+    expect(r.issues[0]!.warnings.join()).not.toMatch(/title_reading/);
+
+    for (const bad of ["サンプル", "sample", "", "あ".repeat(201)]) {
+      const b = clone();
+      (b.candidates[0]!.item as Record<string, unknown>).title_reading = bad;
+      expect(errorsOf(b).length, bad).toBeGreaterThan(0);
+    }
+    const ok = clone();
+    (ok.candidates[0]!.item as Record<string, unknown>).title_reading = "さんぷる ぱーく";
+    expect(errorsOf(ok)).toEqual([]);
+  });
 });
 
 describe("preview（照合）", () => {
@@ -116,6 +135,15 @@ describe("preview（照合）", () => {
 });
 
 describe("apply（登録）", () => {
+  it("候補名の読みを保存する（未記入は NULL）", async () => {
+    const r = await apply(sample, [3]);
+    const reading = (id: string | null | undefined) =>
+      env.DB.prepare("SELECT title_reading FROM items WHERE id = ?").bind(id ?? null).first<{ title_reading: string | null }>();
+    expect(await reading(r.outcomes[0]!.item_id)).toEqual({ title_reading: "さんぷるしこどもぷらねたりうむ" });
+    expect(r.outcomes[3]!.result).toBe("inserted");
+    expect(await reading(r.outcomes[3]!.item_id)).toEqual({ title_reading: null });
+  });
+
   it("新規だけを登録し、要確認は親が認めるまで登録しない", async () => {
     const r = await apply(sample);
     expect(r.status).toBe("completed");

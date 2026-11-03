@@ -149,8 +149,10 @@ export interface AdminPlaceResponse {
 }
 
 export interface AdminItemSummary
-  extends Pick<ItemRecord, "id" | "title" | "publish_status" | "place_id" | "updated_at"> {
+  extends Pick<ItemRecord, "id" | "title" | "title_reading" | "publish_status" | "place_id" | "updated_at"> {
   place_name: string | null;
+  /** 場所の住所（文字列検索の対象） */
+  place_address: string | null;
 }
 
 export interface AdminItemListResponse {

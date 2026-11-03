@@ -13,6 +13,7 @@ import {
   tagAssessments,
 } from "../domain/model";
 import { isKnownTagId } from "../domain/tags";
+import { isReading, READING_ERROR } from "../domain/textMatch";
 
 /**
  * 登録用 JSON（LLM が作り、固定コードが検証・登録する）の形。
@@ -58,6 +59,8 @@ const itemSchema = z
   .object({
     kind: spotKind,
     title: shortText(200),
+    /** 候補名の読み（ひらがな）。管理画面の検索用。自信がなければ null にして needs_review に書く */
+    title_reading: shortText(200).refine(isReading, READING_ERROR).nullable().default(null),
     child_description: z.string().trim().max(120).nullable().default(null),
     official_url: httpUrlSchema.nullable().default(null),
     tag_ids: z.array(z.string()).max(30).default([]),
@@ -206,6 +209,9 @@ export function validateBundle(input: unknown): BundleValidation {
       }
     }
 
+    if (item.title_reading === null) {
+      warnings.push("候補名の読み（title_reading）が未記入です。あとで enrich か管理画面で補えます");
+    }
     if (item.tag_ids.length > 0 && item.facility_tags_status === "unassessed" && item.experience_tags_status === "unassessed") {
       warnings.push("タグがあるのに判定状態が未判定のままです");
     }

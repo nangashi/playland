@@ -97,6 +97,8 @@ export interface ItemRecord {
   kind: ItemKind;
   place_id: string | null;
   title: string;
+  /** 候補名の読み（ひらがな）。管理画面の検索用 */
+  title_reading: string | null;
   child_description: string | null;
   rain_policy: RainPolicy;
   publish_status: PublishStatus;
