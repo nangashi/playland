@@ -65,20 +65,24 @@ export interface CategoryDefinition {
 }
 
 export const CATEGORIES: readonly CategoryDefinition[] = [
+  // 画面では「すべて」を先頭に、この順で 3 個ずつ 3 行に並ぶ。順番やラベルの長さを変えるときは
+  // styles.css の .chip-wrap.is-category の見積もり（画面幅 360〜430px で 3 個 × 3 行）を確かめること。
   {
     id: "active",
     label: "運動あそび",
     tagIds: ["athletic", "climbing", "ball_sports", "water_play", "hiking", "sports_facility", "indoor_playground"],
   },
+  { id: "nature", label: "自然遊び", tagIds: ["nature_observation", "hiking", "insects", "stargazing", "harvesting"] },
+  { id: "attractions", label: "アトラクション", tagIds: ["rides", "amusement_park"] },
   {
     id: "animals",
     label: "生き物",
     tagIds: ["zoo", "aquarium", "farm", "animals", "insects", "aquatic_life"],
   },
-  { id: "attractions", label: "アトラクション", tagIds: ["rides", "amusement_park"] },
+  { id: "museum", label: "展示見学", tagIds: ["science_museum", "museum", "stargazing", "character_theme"] },
   {
     id: "make",
-    label: "体験・ものづくり",
+    label: "体験ものづくり",
     tagIds: [
       "crafting",
       "woodwork",
@@ -91,9 +95,7 @@ export const CATEGORIES: readonly CategoryDefinition[] = [
       "workshop_studio",
     ],
   },
-  { id: "museum", label: "展示・見学", tagIds: ["science_museum", "museum", "stargazing", "character_theme"] },
-  { id: "nature", label: "自然遊び", tagIds: ["nature_observation", "hiking", "insects", "stargazing", "harvesting"] },
-  { id: "music-books", label: "絵本・音楽", tagIds: ["music", "reading", "library"] },
+  { id: "music-books", label: "絵本音楽", tagIds: ["music", "reading", "library"] },
   { id: "shopping", label: "買い物", tagIds: ["shop", "character_theme"] },
 ];
 

@@ -28,7 +28,7 @@ export function FilterBar({ state, settings, onChange }: Props) {
 
       <div className="filter-row">
         <span className="filter-label">カテゴリ</span>
-        <div className="chip-wrap" role="radiogroup" aria-label="カテゴリ">
+        <div className="chip-wrap is-category" role="radiogroup" aria-label="カテゴリ">
           <button
             type="button"
             role="radio"

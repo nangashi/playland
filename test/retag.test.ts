@@ -59,7 +59,7 @@ describe("retag-export", () => {
       title: "サンプル森林公園",
       tag_ids: ["athletic", "insects", "park", "vehicles"],
       unknown_tag_ids: ["vehicles"],
-      categories: ["active", "animals", "nature"],
+      categories: ["active", "nature", "animals"],
     });
     const river = items.find((i) => i.item_id === riverParkId)!;
     expect(river).toMatchObject({ source_id: "sample-city", source_key: "river-park" });
@@ -143,8 +143,8 @@ describe("retag-preview", () => {
       after: ["athletic", "insects", "park", "rides"],
       added: ["rides"],
       removed: ["vehicles"],
-      categories_before: ["active", "animals", "nature"],
-      categories_after: ["active", "animals", "attractions", "nature"],
+      categories_before: ["active", "nature", "animals"],
+      categories_after: ["active", "nature", "attractions", "animals"],
     });
     expect(gym).toMatchObject({ status: "update", added: [], removed: ["vehicles"] });
     expect(summary).toEqual({

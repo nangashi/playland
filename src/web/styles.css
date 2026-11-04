@@ -161,7 +161,8 @@ a {
 
 .filter-row {
   display: grid;
-  grid-template-columns: 56px 1fr;
+  /* 1fr だと列の最小幅が中身の最小幅（入力欄の既定幅など）になり、狭い画面でパネルからはみ出す */
+  grid-template-columns: 56px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
 }
@@ -181,6 +182,16 @@ a {
 
 .chip-wrap.is-centered {
   justify-content: center;
+}
+
+/*
+ * カテゴリは 3 個 × 3 行に収める（並びは CATEGORIES の順）。
+ * チップ幅 = 12px × 文字数 + 左右余白 16px + 枠 2px、間隔 6px。
+ * 画面幅 360px で並べる欄は 242px（360 − 余白 16×2 − パネル枠と余白 11×2 − ラベル 56 − 間隔 8）。
+ */
+.chip-wrap.is-category .chip {
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 .chip,
@@ -224,7 +235,8 @@ a {
 }
 
 .query-input {
-  flex: 1 1 auto;
+  /* 入力欄の既定幅に頼らず、ボタンの残りを埋める */
+  flex: 1 1 0;
   min-width: 0;
   max-width: 320px;
   min-height: 30px;
@@ -235,6 +247,10 @@ a {
   color: var(--text);
   /* 16px 未満だと iPhone で入力時に画面が拡大されるため */
   font-size: 16px;
+}
+
+.query-wrap .chip {
+  flex-shrink: 0;
 }
 
 .query-input.is-active {
