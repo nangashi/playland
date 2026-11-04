@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import type { PublicSettingsResponse } from "../../domain/api";
 import { modeLabel, tripLabel } from "../../domain/labels";
 import { transportModes, type TransportMode } from "../../domain/model";
+import { MAX_QUERY_LENGTH } from "../../domain/search";
 import { CATEGORIES } from "../../domain/tags";
 import { DAY_TRIP_MAX_KM, tripKinds } from "../../domain/trip";
-import { MINUTE_CHOICES, type SearchState } from "../searchState";
+import { MINUTE_CHOICES, normalizeQueryInput, type SearchState } from "../searchState";
 
 interface Props {
   state: SearchState;
@@ -12,7 +14,8 @@ interface Props {
 }
 
 /**
- * 絞り込み。「カテゴリ（何をするか・1 つ選ぶ）」と「条件（重ねて絞る）」の 2 段。
+ * 絞り込み。「ことば（文字列検索）」「カテゴリ（何をするか・1 つ選ぶ）」「条件（重ねて絞る）」の 3 段。
+ * どれも AND で重なる。
  */
 export function FilterBar({ state, settings, onChange }: Props) {
   function toggleMode(mode: TransportMode) {
@@ -21,6 +24,8 @@ export function FilterBar({ state, settings, onChange }: Props) {
 
   return (
     <section className="filters" aria-label="絞り込み">
+      <QueryRow query={state.query} onChange={(query) => onChange({ query })} />
+
       <div className="filter-row">
         <span className="filter-label">カテゴリ</span>
         <div className="chip-wrap" role="radiogroup" aria-label="カテゴリ">
@@ -108,5 +113,56 @@ export function FilterBar({ state, settings, onChange }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+const QUERY_LABEL = "名前・読み・場所・住所でさがす";
+
+/**
+ * 文字列での絞り込み。入力のたびに一覧を取り直さないよう、確定（Enter・「さがす」）で URL に反映する。
+ * 空にしたとき（消去ボタンを含む）はすぐに外す。
+ */
+function QueryRow({ query, onChange }: { query: string; onChange: (query: string) => void }) {
+  const [draft, setDraft] = useState(query);
+  // 戻る・条件をクリアなどで URL 側が変わったら入力欄も合わせる
+  useEffect(() => setDraft(query), [query]);
+
+  function commit(raw: string) {
+    const next = normalizeQueryInput(raw);
+    if (next !== query) onChange(next);
+  }
+
+  return (
+    <form
+      className="filter-row"
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        commit(draft);
+      }}
+    >
+      <label className="filter-label" htmlFor="filter-query">
+        ことば
+      </label>
+      <div className="query-wrap">
+        <input
+          id="filter-query"
+          type="search"
+          enterKeyHint="search"
+          className={query ? "query-input is-active" : "query-input"}
+          value={draft}
+          maxLength={MAX_QUERY_LENGTH}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (e.target.value.trim() === "") commit("");
+          }}
+          placeholder={QUERY_LABEL}
+          aria-label={QUERY_LABEL}
+        />
+        <button type="submit" className="chip">
+          さがす
+        </button>
+      </div>
+    </form>
   );
 }

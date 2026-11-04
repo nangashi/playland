@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ItemDetailResponse, ItemListResponse } from "../src/domain/api";
+import type { ItemDetailResponse, ItemListResponse, MapItemsResponse } from "../src/domain/api";
 import { get, seed, send } from "./helpers";
 
 beforeEach(seed);
@@ -47,6 +47,23 @@ describe("GET /api/items", () => {
   it("カテゴリと雨の日の条件で絞れる", async () => {
     const r = await list("?category=make&rain=ok");
     expect(r.items.map((i) => i.id).sort()).toEqual(["it-kids-spot", "it-science-spot", "it-woodshop-spot"]);
+  });
+
+  it("文字列（読み・住所を含む）で絞れ、カテゴリなどの条件と重なる。一覧と地図で同じ結果", async () => {
+    await env.DB.prepare("UPDATE items SET title_reading = 'さんぷるわんすいぞくかん' WHERE id = 'it-aquarium-spot'").run();
+    expect((await list("?q=スイゾク")).items.map((i) => i.id)).toEqual(["it-aquarium-spot"]);
+    expect((await list("?q=みなみ町")).items.map((i) => i.id)).toEqual(["it-kids-spot"]);
+    expect((await list(`?q=${encodeURIComponent("サンプル 町")}&category=make&rain=ok`)).items.map((i) => i.id).sort()).toEqual([
+      "it-kids-spot",
+      "it-science-spot",
+    ]);
+    const map: MapItemsResponse = await (await get("/api/map-items?q=すいぞく")).json();
+    expect(map.total).toBe(1);
+  });
+
+  it("文字列検索でも下書き・非表示の候補は出ない", async () => {
+    const body = await list(`?q=${encodeURIComponent("候補")}&include_unknown=true&include_hidden=true`);
+    expect(body.total).toBe(0);
   });
 
   it("不正な条件は 400", async () => {

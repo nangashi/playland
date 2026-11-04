@@ -1,6 +1,6 @@
 import { transportModes, type TransportMode } from "../domain/model";
 import { tripLabel } from "../domain/labels";
-import { DEFAULT_PAGE_SIZE } from "../domain/search";
+import { DEFAULT_PAGE_SIZE, MAX_QUERY_LENGTH } from "../domain/search";
 import { tripKinds, type TripKind } from "../domain/trip";
 import { CATEGORIES, getCategory } from "../domain/tags";
 
@@ -22,6 +22,8 @@ export interface SearchState {
   includeUnknown: boolean;
   /** 家族で「興味なし」にしたものも表示する */
   includeHidden: boolean;
+  /** 文字列検索（名前・読み・場所・住所）。空文字は指定なし */
+  query: string;
   pages: number;
 }
 
@@ -48,6 +50,7 @@ export function readSearchState(params: URLSearchParams): SearchState {
     trip: (tripKinds as readonly (string | null)[]).includes(trip) ? (trip as TripKind) : null,
     includeUnknown: params.get("unknown") === "1",
     includeHidden: params.get("hidden") === "1",
+    query: normalizeQueryInput(params.get("q") ?? ""),
     pages: Math.min(Math.max(pages, 1), MAX_PAGES),
   };
 }
@@ -63,6 +66,7 @@ export function writeSearchState(state: SearchState): URLSearchParams {
   if (state.trip) p.set("trip", state.trip);
   if (state.includeUnknown) p.set("unknown", "1");
   if (state.includeHidden) p.set("hidden", "1");
+  if (state.query) p.set("q", state.query);
   if (state.view === "list" && state.pages > 1) p.set("pages", String(state.pages));
   return p;
 }
@@ -81,7 +85,13 @@ export function toApiParams(state: SearchState, page: number): URLSearchParams {
   if (state.modes.length > 0) p.set("modes", state.modes.join(","));
   if (state.maxMinutes !== null) p.set("max_minutes", String(state.maxMinutes));
   if (state.trip) p.set("trip", state.trip);
+  if (state.query) p.set("q", state.query);
   return p;
+}
+
+/** 入力された検索文字列を、URL・API に載せる形にする（前後の空白を除き、長さを API の上限に収める） */
+export function normalizeQueryInput(raw: string): string {
+  return raw.trim().slice(0, MAX_QUERY_LENGTH).trim();
 }
 
 export function toMapApiParams(state: SearchState): URLSearchParams {
@@ -104,6 +114,7 @@ export interface ActiveCondition {
 /** 適用中の条件（結果ゼロのときに、どれを外すか選べるようにする） */
 export function activeConditions(state: SearchState): ActiveCondition[] {
   const out: ActiveCondition[] = [];
+  if (state.query) out.push({ label: state.query, reset: { query: "" } });
   if (state.category) {
     out.push({ label: CATEGORIES.find((c) => c.id === state.category)?.label ?? "カテゴリ", reset: { category: null } });
   }
@@ -125,4 +136,5 @@ export const CLEARED: Partial<SearchState> = {
   trip: null,
   includeUnknown: false,
   includeHidden: false,
+  query: "",
 };

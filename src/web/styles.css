@@ -217,6 +217,31 @@ a {
   cursor: pointer;
 }
 
+/* 文字列検索（チップと同じ高さ・角丸） */
+.query-wrap {
+  display: flex;
+  gap: 6px;
+}
+
+.query-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  /* 16px 未満だと iPhone で入力時に画面が拡大されるため */
+  font-size: 16px;
+}
+
+.query-input.is-active {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+}
+
 /* ---- 件数・表示切替 ---- */
 .result-bar {
   display: flex;

@@ -190,6 +190,76 @@ describe("移動（A08・A09・A10）", () => {
   });
 });
 
+describe("文字列検索（名前・読み・場所・住所）", () => {
+  const assessed = { facility_tags_status: "assessed", experience_tags_status: "assessed" } as const;
+  const d = data({
+    items: [
+      makeItem("aquarium", { ...assessed, title: "サンプル湾水族館", title_reading: "さんぷるわんすいぞくかん", rain_policy: "ok" }),
+      makeItem("zoo", { ...assessed, title: "サンプル動物園", title_reading: "さんぷるどうぶつえん", rain_policy: "not_suitable" }),
+      makeItem("park", { ...assessed, title: "みなと公園", place_id: "pl-minato" }),
+      makeItem("no-place", { ...assessed, title: "ＡＢＣ キッズ", place_id: null }),
+      makeItem("draft", { title: "サンプル下書き水族館", title_reading: "さんぷるしたがきすいぞくかん", publish_status: "draft" }),
+      makeItem("hidden", { title: "サンプル非表示水族館", publish_status: "hidden" }),
+    ],
+    itemTags: [
+      { item_id: "aquarium", tag_id: "aquarium" },
+      { item_id: "zoo", tag_id: "zoo" },
+      { item_id: "park", tag_id: "park" },
+    ],
+    places: [
+      { id: "pl-aquarium", name: "サンプル湾水族館", address_text: "サンプル市みなと町5", home_distance_km: 10 },
+      { id: "pl-zoo", name: "サンプル動物園", address_text: "サンプル市やま町1", home_distance_km: 150 },
+      { id: "pl-minato", name: "みなと公園 管理棟", address_text: null, home_distance_km: 5 },
+    ],
+  });
+  const q = (text: string, extra: Parameters<typeof query>[0] = {}) => ids(searchItems(d, query({ q: text, ...extra }))).sort();
+
+  it("漢字の名前を読み（ひらがな）で探せる", () => {
+    expect(q("すいぞく")).toEqual(["aquarium"]);
+  });
+
+  it("カタカナ・ひらがな、全角・半角、大文字・小文字の違いを区別しない", () => {
+    expect(q("スイゾク")).toEqual(["aquarium"]);
+    expect(q("ドウブツ")).toEqual(["zoo"]);
+    expect(q("abcきっず")).toEqual(["no-place"]);
+  });
+
+  it("場所名・住所でも一致する", () => {
+    expect(q("管理棟")).toEqual(["park"]);
+    expect(q("やま町")).toEqual(["zoo"]);
+    expect(q("みなと")).toEqual(["aquarium", "park"]);
+  });
+
+  it("空白で分けた語はすべて含むものだけ（AND）。項目をまたいでもよい", () => {
+    expect(q("さんぷる　みなと")).toEqual(["aquarium"]);
+    expect(q("すいぞく どうぶつ")).toEqual([]);
+  });
+
+  it("空・空白だけなら絞らない", () => {
+    expect(q("")).toEqual(["aquarium", "no-place", "park", "zoo"]);
+    expect(q("  　")).toEqual(["aquarium", "no-place", "park", "zoo"]);
+  });
+
+  it("下書き・非表示は文字列が一致しても出さない", () => {
+    expect(q("すいぞく", { include_unknown: "true", include_hidden: "true" })).toEqual(["aquarium"]);
+    expect(q("下書き")).toEqual([]);
+    expect(q("非表示")).toEqual([]);
+  });
+
+  it("カテゴリ・雨の日・日帰りなどの条件と AND で重なる", () => {
+    expect(q("さんぷる", { category: "animals" })).toEqual(["aquarium", "zoo"]);
+    expect(q("さんぷる", { category: "animals", rain: "ok" })).toEqual(["aquarium"]);
+    expect(q("さんぷる", { trip: "trip" })).toEqual(["zoo"]);
+    expect(q("公園", { category: "animals" })).toEqual([]);
+  });
+
+  it("一致しないものを不明として戻さない", () => {
+    const r = searchItems(d, query({ q: "すいぞく", include_unknown: "true" }));
+    expect(ids(r)).toEqual(["aquarium"]);
+    expect(r.total).toBe(1);
+  });
+});
+
 describe("parseSearchQuery", () => {
   it("既定値を補う", () => {
     const r = parseSearchQuery(new URLSearchParams(""));
@@ -214,6 +284,7 @@ describe("parseSearchQuery", () => {
       "include_hidden=1",
       "rain=ok_or_conditional",
       "max_minutes=0",
+      `q=${"あ".repeat(101)}`,
     ]) {
       expect(parseSearchQuery(new URLSearchParams(q)).success, q).toBe(false);
     }
@@ -231,10 +302,10 @@ describe("日帰り・旅行（場所に保存した自宅からの距離）", (
       makeItem(id, id === "no-place" ? { place_id: null } : {}),
     ),
     places: [
-      { id: "pl-near", home_distance_km: 12.3 },
-      { id: "pl-edge", home_distance_km: 100 },
-      { id: "pl-far", home_distance_km: 150.2 },
-      { id: "pl-no-distance", home_distance_km: null },
+      { id: "pl-near", name: "近く", address_text: null, home_distance_km: 12.3 },
+      { id: "pl-edge", name: "境目", address_text: null, home_distance_km: 100 },
+      { id: "pl-far", name: "遠く", address_text: null, home_distance_km: 150.2 },
+      { id: "pl-no-distance", name: "距離なし", address_text: null, home_distance_km: null },
     ],
   });
 
